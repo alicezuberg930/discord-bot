@@ -10,9 +10,11 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  DiscordAPIError,
   MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
+  RESTJSONErrorCodes,
   TextInputBuilder,
   TextInputStyle,
   type ButtonInteraction,
@@ -259,13 +261,64 @@ export class UserVerificationService {
   }
 
   private async postVerificationPrompt(member: GuildMember): Promise<void> {
-    await member.send({
-      content: `Chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Tin nhắn và biểu mẫu này chỉ hiển thị cho bạn.`,
-      components: [this.createStartButtonRow(member.guild.id, member.id)],
-    });
+    try {
+      await member.send({
+        content: `Chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Tin nhắn và biểu mẫu này chỉ hiển thị cho bạn.`,
+        components: [this.createStartButtonRow(member.guild.id, member.id)],
+      });
+    } catch (error) {
+      if (
+        error instanceof DiscordAPIError &&
+        error.code === RESTJSONErrorCodes.CannotSendMessagesToThisUser
+      ) {
+        await this.postChannelVerificationPrompt(member);
+        return;
+      }
+
+      throw error;
+    }
 
     this.logger.log(
       `Sent a private verification prompt to Discord user ${member.id} for guild ${member.guild.id}`,
+    );
+  }
+
+  /**
+   * Fallback for members who do not accept direct messages from server
+   * members. The button stays bound to the mentioned user, and the modal is
+   * still private, so only the mention is visible to the channel.
+   */
+  private async postChannelVerificationPrompt(
+    member: GuildMember,
+  ): Promise<void> {
+    const channelId = this.configService.get('VERIFICATION_CHANNEL_ID', {
+      infer: true,
+    });
+
+    if (!channelId) {
+      this.logger.warn(
+        `Discord user ${member.id} does not accept direct messages and VERIFICATION_CHANNEL_ID is not configured; no verification prompt was sent`,
+      );
+      return;
+    }
+
+    const channel = await member.guild.channels.fetch(channelId);
+
+    if (!channel?.isSendable()) {
+      this.logger.error(
+        `Verification channel ${channelId} is missing or is not sendable`,
+      );
+      return;
+    }
+
+    await channel.send({
+      content: `<@${member.id}>, chào mừng bạn! Bot không gửi được tin nhắn riêng cho bạn, vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Biểu mẫu chỉ hiển thị riêng cho bạn.`,
+      components: [this.createStartButtonRow(member.guild.id, member.id)],
+      allowedMentions: { users: [member.id] },
+    });
+
+    this.logger.log(
+      `Discord user ${member.id} does not accept direct messages; posted the verification prompt in channel ${channelId}`,
     );
   }
 

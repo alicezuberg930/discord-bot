@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import {
+  DiscordAPIError,
   MessageFlags,
   type ButtonInteraction,
   type Guild,
@@ -69,6 +70,76 @@ describe('UserVerificationService', () => {
     expect(message.components[0].components[0].data.custom_id).toBe(
       'user-verification:start:guild-id:user-id',
     );
+  });
+
+  it('posts a user-bound prompt in the verification channel when DMs are closed', async () => {
+    const dmClosed = new DiscordAPIError(
+      { code: 50007, message: 'Cannot send messages to this user' },
+      50007,
+      403,
+      'POST',
+      '/channels/dm-channel-id/messages',
+      { body: undefined, files: undefined },
+    );
+    const channelSend = vi.fn();
+    const fetchChannel = vi.fn().mockResolvedValue({
+      isSendable: () => true,
+      send: channelSend,
+    });
+    const { service } = createService();
+    const verifiedRole = { id: 'verified-role-id', name: 'member' };
+    const member = {
+      id: 'user-id',
+      user: { bot: false },
+      send: vi.fn().mockRejectedValue(dmClosed),
+      roles: { cache: { has: vi.fn().mockReturnValue(false) } },
+      guild: {
+        id: 'guild-id',
+        name: 'Test Guild',
+        roles: {
+          fetch: vi
+            .fn()
+            .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
+        },
+        channels: { fetch: fetchChannel },
+      },
+    } as unknown as GuildMember;
+
+    await service.handleMemberJoin(member);
+
+    expect(fetchChannel).toHaveBeenCalledWith('1566719152507330602');
+    const message = channelSend.mock.calls[0][0];
+    expect(message.content).toContain('<@user-id>');
+    expect(message.allowedMentions).toEqual({ users: ['user-id'] });
+    expect(message.components[0].components[0].data.custom_id).toBe(
+      'user-verification:start:guild-id:user-id',
+    );
+  });
+
+  it('does not post in a channel when DMs fail for another reason', async () => {
+    const fetchChannel = vi.fn();
+    const { service } = createService();
+    const verifiedRole = { id: 'verified-role-id', name: 'member' };
+    const member = {
+      id: 'user-id',
+      user: { bot: false },
+      send: vi.fn().mockRejectedValue(new Error('network down')),
+      roles: { cache: { has: vi.fn().mockReturnValue(false) } },
+      guild: {
+        id: 'guild-id',
+        name: 'Test Guild',
+        roles: {
+          fetch: vi
+            .fn()
+            .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
+        },
+        channels: { fetch: fetchChannel },
+      },
+    } as unknown as GuildMember;
+
+    await service.handleMemberJoin(member);
+
+    expect(fetchChannel).not.toHaveBeenCalled();
   });
 
   it('prompts members who joined before the bot and lack the verified role', async () => {
@@ -274,7 +345,7 @@ describe('UserVerificationService', () => {
     });
   });
 
-  it('rejects a CCCD with an unknown province code privately', async () => {
+  it('rejects a structurally invalid CCCD privately', async () => {
     const { service } = createService();
     const reply = vi.fn();
     const interaction = {
@@ -284,7 +355,7 @@ describe('UserVerificationService', () => {
       inCachedGuild: () => true,
       fields: {
         getTextInputValue: (id: string) =>
-          id === 'phone' ? '0912345678' : '003153000257',
+          id === 'phone' ? '0912345678' : '03715300025A',
       },
       deferred: false,
       replied: false,

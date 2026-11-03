@@ -69,8 +69,9 @@ export type CccdGender = 'Nam' | 'Nữ';
 
 export interface CccdDetails {
   value: string;
-  //   provinceCode: CccdProvinceCode;
-  //   province: string;
+  provinceCode: string;
+  /** Province name from {@link CCCD_PROVINCES}, or null for an unlisted code. */
+  province: string | null;
   genderCenturyCode: number;
   gender: CccdGender;
   century: number;
@@ -92,12 +93,11 @@ export function parseCccd(value: string): CccdDetails | null {
     return null;
   }
 
-  //   const provinceCode = normalized.slice(0, 3) as CccdProvinceCode;
-  //   const province = CCCD_PROVINCES[provinceCode];
-
-  //   if (!province) {
-  //     return null;
-  //   }
+  // The province code is decoded for information only. Unlisted codes are
+  // accepted so that valid cards are never rejected because of an outdated
+  // or incomplete province table.
+  const provinceCode = normalized.slice(0, 3);
+  const province = CCCD_PROVINCES[provinceCode as CccdProvinceCode] ?? null;
 
   const genderCenturyCode = Number(normalized[3]);
   const centuryIndex = Math.floor(genderCenturyCode / 2);
@@ -105,8 +105,8 @@ export function parseCccd(value: string): CccdDetails | null {
 
   return {
     value: normalized,
-    // provinceCode,
-    // province,
+    provinceCode,
+    province,
     genderCenturyCode,
     gender: genderCenturyCode % 2 === 0 ? 'Nam' : 'Nữ',
     century: 20 + centuryIndex,
