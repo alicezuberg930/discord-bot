@@ -64,6 +64,10 @@ export class DiscordService
 
     this.client.once(Events.ClientReady, (readyClient) => {
       this.logger.log(`Logged in to Discord as ${readyClient.user.tag}`);
+
+      for (const guild of readyClient.guilds.cache.values()) {
+        void this.userVerificationService.handleExistingGuildMembers(guild);
+      }
     });
 
     this.client.on(Events.Error, (error) => {
@@ -72,6 +76,10 @@ export class DiscordService
 
     this.client.on(Events.GuildMemberAdd, async (member) => {
       await this.userVerificationService.handleMemberJoin(member);
+    });
+
+    this.client.on(Events.GuildCreate, async (guild) => {
+      await this.userVerificationService.handleExistingGuildMembers(guild);
     });
 
     this.client.on(Events.InteractionCreate, async (interaction) => {

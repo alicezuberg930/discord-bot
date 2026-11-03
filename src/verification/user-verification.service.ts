@@ -22,12 +22,14 @@ import {
   type Role,
 } from 'discord.js';
 import type { EnvironmentVariables } from '../config/environment.js';
+import { normalizeCccd } from '../config/utils/cccd-validator.js';
 import { normalizeVietnameseMobileNumber } from '../config/utils/vietnamese-phone-validator.js';
 import { PrismaService } from '../database/prisma.service.js';
 
 const START_BUTTON_ID = 'user-verification:start';
 const LEGACY_START_BUTTON_ID = 'email-verification:start';
 const DETAILS_MODAL_ID = 'user-verification:details';
+const ACCOUNT_NAME_INPUT_ID = 'account_name';
 const PHONE_INPUT_ID = 'phone';
 const CCCD_INPUT_ID = 'cccd';
 
@@ -36,6 +38,7 @@ type VerificationInteraction = ButtonInteraction | ModalSubmitInteraction;
 @Injectable()
 export class UserVerificationService {
   private readonly logger = new Logger(UserVerificationService.name);
+  private readonly handledMembers = new Set<string>();
 
   constructor(
     private readonly configService: ConfigService<EnvironmentVariables, true>,
@@ -43,9 +46,74 @@ export class UserVerificationService {
   ) {}
 
   async handleMemberJoin(member: GuildMember): Promise<void> {
-    if (member.user.bot || member.roles.cache.size > 1) {
+    if (
+      member.user.bot ||
+      !this.isConfiguredVerificationGuild(member.guild.id)
+    ) {
       return;
     }
+
+    try {
+      const role = await this.resolveVerifiedRole(member.guild);
+      await this.prepareMemberVerification(member, role);
+    } catch (error) {
+      this.logUnexpectedError(
+        `Failed to prepare verification for Discord user ${member.id} in guild ${member.guild.id}`,
+        error,
+      );
+    }
+  }
+
+  async handleExistingGuildMembers(guild: Guild): Promise<void> {
+    if (!this.isConfiguredVerificationGuild(guild.id)) {
+      return;
+    }
+
+    try {
+      const role = await this.resolveVerifiedRole(guild);
+      const members = await guild.members.fetch();
+
+      for (const member of members.values()) {
+        if (member.user.bot) {
+          continue;
+        }
+
+        try {
+          await this.prepareMemberVerification(member, role);
+        } catch (error) {
+          this.logUnexpectedError(
+            `Failed to prepare verification for Discord user ${member.id}`,
+            error,
+          );
+        }
+      }
+
+      this.logger.log(
+        `Checked ${members.size} existing members in Discord guild ${guild.id}`,
+      );
+    } catch (error) {
+      this.logUnexpectedError(
+        `Failed to check existing members in Discord guild ${guild.id}`,
+        error,
+      );
+    }
+  }
+
+  private async prepareMemberVerification(
+    member: GuildMember,
+    role: Role,
+  ): Promise<void> {
+    if (member.roles.cache.has(role.id)) {
+      return;
+    }
+
+    const memberKey = `${member.guild.id}:${member.id}`;
+
+    if (this.handledMembers.has(memberKey)) {
+      return;
+    }
+
+    this.handledMembers.add(memberKey);
 
     try {
       const existingUser = await this.prisma.user.findUnique({
@@ -58,14 +126,23 @@ export class UserVerificationService {
       });
 
       if (existingUser) {
-        await this.restoreMemberRole(member);
+        await this.restoreMemberRole(member, role);
         return;
       }
 
       await this.postVerificationPrompt(member);
     } catch (error) {
-      this.logUnexpectedError('Failed to prepare user verification', error);
+      this.handledMembers.delete(memberKey);
+      throw error;
     }
+  }
+
+  private isConfiguredVerificationGuild(guildId: string): boolean {
+    const configuredGuildId = this.configService.get('DISCORD_GUILD_ID', {
+      infer: true,
+    });
+
+    return !configuredGuildId || guildId === configuredGuildId;
   }
 
   async handleInteraction(
@@ -130,6 +207,17 @@ export class UserVerificationService {
     interaction: ModalSubmitInteraction,
   ): Promise<void> {
     this.assertGuildInteraction(interaction);
+    const accountName = interaction.fields
+      .getTextInputValue(ACCOUNT_NAME_INPUT_ID)
+      .trim()
+      .replace(/\s+/g, ' ');
+
+    if (!accountName || accountName.length > 100) {
+      throw new BadRequestException(
+        'Tên tài khoản phải có từ 1 đến 100 ký tự.',
+      );
+    }
+
     const phone = normalizeVietnameseMobileNumber(
       interaction.fields.getTextInputValue(PHONE_INPUT_ID),
     );
@@ -138,13 +226,13 @@ export class UserVerificationService {
       throw new BadRequestException('Số điện thoại không hợp lệ tại Việt Nam.');
     }
 
-    const cccd = interaction.fields
-      .getTextInputValue(CCCD_INPUT_ID)
-      .replace(/\s/g, '');
+    const cccd = normalizeCccd(
+      interaction.fields.getTextInputValue(CCCD_INPUT_ID),
+    );
 
-    if (!/^\d{12}$/.test(cccd)) {
+    if (!cccd) {
       throw new BadRequestException(
-        'Căn cước nhân dân phải gồm đúng 12 chữ số.',
+        'Số căn cước công dân không đúng cấu trúc quy định.',
       );
     }
 
@@ -171,6 +259,7 @@ export class UserVerificationService {
         },
       },
       create: {
+        accountName,
         phone,
         cccd,
         guildId: interaction.guildId,
@@ -178,6 +267,7 @@ export class UserVerificationService {
         email: previousEmail?.email,
       },
       update: {
+        accountName,
         phone,
         cccd,
         email: previousEmail?.email ?? undefined,
@@ -193,8 +283,10 @@ export class UserVerificationService {
     );
   }
 
-  private async restoreMemberRole(member: GuildMember): Promise<void> {
-    const role = await this.resolveVerifiedRole(member.guild);
+  private async restoreMemberRole(
+    member: GuildMember,
+    role: Role,
+  ): Promise<void> {
     await this.assertCanAssignRole(member, role);
 
     if (!member.roles.cache.has(role.id)) {
@@ -281,6 +373,14 @@ export class UserVerificationService {
   }
 
   private createDetailsModal(): ModalBuilder {
+    const accountNameInput = new TextInputBuilder()
+      .setCustomId(ACCOUNT_NAME_INPUT_ID)
+      .setLabel('Tên tài khoản')
+      .setPlaceholder('Nguyễn Văn A')
+      .setRequired(true)
+      .setMinLength(1)
+      .setMaxLength(100)
+      .setStyle(TextInputStyle.Short);
     const phoneInput = new TextInputBuilder()
       .setCustomId(PHONE_INPUT_ID)
       .setLabel('Số điện thoại')
@@ -302,6 +402,9 @@ export class UserVerificationService {
       .setCustomId(DETAILS_MODAL_ID)
       .setTitle('Xác thực người dùng')
       .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          accountNameInput,
+        ),
         new ActionRowBuilder<TextInputBuilder>().addComponents(phoneInput),
         new ActionRowBuilder<TextInputBuilder>().addComponents(cccdInput),
       );
@@ -338,7 +441,14 @@ export class UserVerificationService {
   }
 
   private logUnexpectedError(message: string, error: unknown): void {
-    const errorName = error instanceof Error ? error.name : 'UnknownError';
-    this.logger.error(`${message} (${errorName})`);
+    if (error instanceof Error) {
+      this.logger.error(
+        `${message} (${error.name}): ${error.message}`,
+        error.stack,
+      );
+      return;
+    }
+
+    this.logger.error(`${message} (UnknownError): ${String(error)}`);
   }
 }

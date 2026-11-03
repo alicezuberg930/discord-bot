@@ -3,9 +3,9 @@
 A small NestJS 12 application that connects to Discord through `discord.js` and
 provides `/ping` and Gemini-powered `/question` slash commands. The HTTP server
 exposes health at `GET /`, Discord status at `GET /ping`, and Gemini questions at
-`POST /question`. New members can submit their Vietnamese phone number and CCCD
-through a private modal to receive the `member` role. Registration data is
-persisted through Prisma in PostgreSQL.
+`POST /question`. New members can submit their account name, Vietnamese phone
+number, and CCCD through a private modal to receive the `member` role.
+Registration data is persisted through Prisma in PostgreSQL.
 
 ## Requirements
 
@@ -37,10 +37,10 @@ npm run db:smoke     # disposable write/read/delete connectivity check
 npm run db:down      # stop PostgreSQL while preserving its volume
 ```
 
-The `users` table stores an auto-incrementing ID, phone, CCCD, guild ID, Discord
-user ID, optional previously known email, `created_at`, and `update_at`. Registered
-users who rejoin are recognized from PostgreSQL and have their role restored
-automatically.
+The `users` table stores an auto-incrementing ID, account name, phone, CCCD,
+guild ID, Discord user ID, optional previously known email, `created_at`, and
+`update_at`. Registered users who rejoin are recognized from PostgreSQL and have
+their role restored automatically.
 
 ## Configure Discord
 
@@ -79,12 +79,19 @@ automatically.
    `VERIFIED_ROLE_ID` is recommended if multiple roles could have the same name.
 
 When a human user joins with only the `@everyone` role, the bot mentions them in
-the verification channel with the **Xác thực người dùng** button. The button opens
-a private modal for **Số điện thoại** and **Căn cước nhân dân**. A valid Vietnamese
-mobile-number format and a 12-digit CCCD are required. After submission, the bot
-upserts the `users` record and assigns the configured role. If an old email
-verification record exists for that Discord account, its email is copied into
-`users.email`.
+the verification channel with the **Xác thực người dùng** button. The button
+opens a private modal for **Tên tài khoản**, **Số điện thoại**, and **Căn cước
+nhân dân**. A valid Vietnamese mobile-number format and a structurally valid
+12-digit CCCD are required. After submission, the bot upserts the `users` record
+and assigns the configured role. If an old email verification record exists for
+that Discord account, its email is copied into `users.email`.
+
+When the bot starts or is added to a guild, it also checks members who joined
+before the bot. Members without the configured verified role receive the same
+verification button; registered members have that role restored automatically.
+Having an unrelated role does not skip verification. Verification events and
+startup scans are restricted to `DISCORD_GUILD_ID` because the configured
+channel and role IDs belong to that guild.
 
 Phone numbers and CCCDs are sensitive personal data and are stored as plain
 strings in PostgreSQL as requested. Restrict database access, backups, and Prisma

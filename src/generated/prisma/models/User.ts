@@ -36,6 +36,7 @@ export type UserSumAggregateOutputType = {
 
 export type UserMinAggregateOutputType = {
   id: number | null
+  accountName: string | null
   phone: string | null
   cccd: string | null
   guildId: string | null
@@ -47,6 +48,7 @@ export type UserMinAggregateOutputType = {
 
 export type UserMaxAggregateOutputType = {
   id: number | null
+  accountName: string | null
   phone: string | null
   cccd: string | null
   guildId: string | null
@@ -58,6 +60,7 @@ export type UserMaxAggregateOutputType = {
 
 export type UserCountAggregateOutputType = {
   id: number
+  accountName: number
   phone: number
   cccd: number
   guildId: number
@@ -79,6 +82,7 @@ export type UserSumAggregateInputType = {
 
 export type UserMinAggregateInputType = {
   id?: true
+  accountName?: true
   phone?: true
   cccd?: true
   guildId?: true
@@ -90,6 +94,7 @@ export type UserMinAggregateInputType = {
 
 export type UserMaxAggregateInputType = {
   id?: true
+  accountName?: true
   phone?: true
   cccd?: true
   guildId?: true
@@ -101,6 +106,7 @@ export type UserMaxAggregateInputType = {
 
 export type UserCountAggregateInputType = {
   id?: true
+  accountName?: true
   phone?: true
   cccd?: true
   guildId?: true
@@ -199,6 +205,7 @@ export type UserGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
 
 export type UserGroupByOutputType = {
   id: number
+  accountName: string
   phone: string
   cccd: string
   guildId: string
@@ -233,6 +240,7 @@ export type UserWhereInput = {
   OR?: Prisma.UserWhereInput[]
   NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
   id?: Prisma.IntFilter<"User"> | number
+  accountName?: Prisma.StringFilter<"User"> | string
   phone?: Prisma.StringFilter<"User"> | string
   cccd?: Prisma.StringFilter<"User"> | string
   guildId?: Prisma.StringFilter<"User"> | string
@@ -244,6 +252,7 @@ export type UserWhereInput = {
 
 export type UserOrderByWithRelationInput = {
   id?: Prisma.SortOrder
+  accountName?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   cccd?: Prisma.SortOrder
   guildId?: Prisma.SortOrder
@@ -259,6 +268,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
   OR?: Prisma.UserWhereInput[]
   NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
+  accountName?: Prisma.StringFilter<"User"> | string
   phone?: Prisma.StringFilter<"User"> | string
   cccd?: Prisma.StringFilter<"User"> | string
   guildId?: Prisma.StringFilter<"User"> | string
@@ -270,6 +280,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
 
 export type UserOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
+  accountName?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   cccd?: Prisma.SortOrder
   guildId?: Prisma.SortOrder
@@ -289,6 +300,7 @@ export type UserScalarWhereWithAggregatesInput = {
   OR?: Prisma.UserScalarWhereWithAggregatesInput[]
   NOT?: Prisma.UserScalarWhereWithAggregatesInput | Prisma.UserScalarWhereWithAggregatesInput[]
   id?: Prisma.IntWithAggregatesFilter<"User"> | number
+  accountName?: Prisma.StringWithAggregatesFilter<"User"> | string
   phone?: Prisma.StringWithAggregatesFilter<"User"> | string
   cccd?: Prisma.StringWithAggregatesFilter<"User"> | string
   guildId?: Prisma.StringWithAggregatesFilter<"User"> | string
@@ -299,6 +311,7 @@ export type UserScalarWhereWithAggregatesInput = {
 }
 
 export type UserCreateInput = {
+  accountName: string
   phone: string
   cccd: string
   guildId: string
@@ -310,6 +323,7 @@ export type UserCreateInput = {
 
 export type UserUncheckedCreateInput = {
   id?: number
+  accountName: string
   phone: string
   cccd: string
   guildId: string
@@ -320,6 +334,7 @@ export type UserUncheckedCreateInput = {
 }
 
 export type UserUpdateInput = {
+  accountName?: Prisma.StringFieldUpdateOperationsInput | string
   phone?: Prisma.StringFieldUpdateOperationsInput | string
   cccd?: Prisma.StringFieldUpdateOperationsInput | string
   guildId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -331,6 +346,7 @@ export type UserUpdateInput = {
 
 export type UserUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
+  accountName?: Prisma.StringFieldUpdateOperationsInput | string
   phone?: Prisma.StringFieldUpdateOperationsInput | string
   cccd?: Prisma.StringFieldUpdateOperationsInput | string
   guildId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -342,6 +358,7 @@ export type UserUncheckedUpdateInput = {
 
 export type UserCreateManyInput = {
   id?: number
+  accountName: string
   phone: string
   cccd: string
   guildId: string
@@ -352,6 +369,7 @@ export type UserCreateManyInput = {
 }
 
 export type UserUpdateManyMutationInput = {
+  accountName?: Prisma.StringFieldUpdateOperationsInput | string
   phone?: Prisma.StringFieldUpdateOperationsInput | string
   cccd?: Prisma.StringFieldUpdateOperationsInput | string
   guildId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -363,6 +381,7 @@ export type UserUpdateManyMutationInput = {
 
 export type UserUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
+  accountName?: Prisma.StringFieldUpdateOperationsInput | string
   phone?: Prisma.StringFieldUpdateOperationsInput | string
   cccd?: Prisma.StringFieldUpdateOperationsInput | string
   guildId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -379,6 +398,7 @@ export type UserGuildIdDiscordUserIdCompoundUniqueInput = {
 
 export type UserCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  accountName?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   cccd?: Prisma.SortOrder
   guildId?: Prisma.SortOrder
@@ -394,6 +414,7 @@ export type UserAvgOrderByAggregateInput = {
 
 export type UserMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  accountName?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   cccd?: Prisma.SortOrder
   guildId?: Prisma.SortOrder
@@ -405,6 +426,7 @@ export type UserMaxOrderByAggregateInput = {
 
 export type UserMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  accountName?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   cccd?: Prisma.SortOrder
   guildId?: Prisma.SortOrder
@@ -422,6 +444,7 @@ export type UserSumOrderByAggregateInput = {
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  accountName?: boolean
   phone?: boolean
   cccd?: boolean
   guildId?: boolean
@@ -433,6 +456,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
 
 export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  accountName?: boolean
   phone?: boolean
   cccd?: boolean
   guildId?: boolean
@@ -444,6 +468,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
 
 export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  accountName?: boolean
   phone?: boolean
   cccd?: boolean
   guildId?: boolean
@@ -455,6 +480,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
 
 export type UserSelectScalar = {
   id?: boolean
+  accountName?: boolean
   phone?: boolean
   cccd?: boolean
   guildId?: boolean
@@ -464,13 +490,14 @@ export type UserSelectScalar = {
   updatedAt?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "phone" | "cccd" | "guildId" | "discordUserId" | "email" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "accountName" | "phone" | "cccd" | "guildId" | "discordUserId" | "email" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
 
 export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "User"
   objects: {}
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
+    accountName: string
     phone: string
     cccd: string
     guildId: string
@@ -902,6 +929,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
  */
 export interface UserFieldRefs {
   readonly id: Prisma.FieldRef<"User", 'Int'>
+  readonly accountName: Prisma.FieldRef<"User", 'String'>
   readonly phone: Prisma.FieldRef<"User", 'String'>
   readonly cccd: Prisma.FieldRef<"User", 'String'>
   readonly guildId: Prisma.FieldRef<"User", 'String'>

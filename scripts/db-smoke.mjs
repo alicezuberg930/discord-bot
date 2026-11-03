@@ -20,10 +20,12 @@ try {
     where: { guildId_discordUserId: key },
     create: {
       ...key,
+      accountName: 'Smoke Test',
       phone: '0912345678',
       cccd: '012345678901',
     },
     update: {
+      accountName: 'Smoke Test',
       phone: '0912345678',
       cccd: '012345678901',
     },

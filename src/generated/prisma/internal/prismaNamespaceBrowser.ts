@@ -96,6 +96,7 @@ export type EmailVerificationScalarFieldEnum = (typeof EmailVerificationScalarFi
 
 export const UserScalarFieldEnum = {
   id: 'id',
+  accountName: 'accountName',
   phone: 'phone',
   cccd: 'cccd',
   guildId: 'guildId',
