@@ -11,6 +11,7 @@ import {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  Partials,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -39,7 +40,12 @@ export class DiscordService
 {
   private readonly logger = new Logger(DiscordService.name);
   private readonly client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.DirectMessages,
+    ],
+    partials: [Partials.Channel],
   });
 
   constructor(

@@ -39,26 +39,22 @@ describe('UserVerificationService', () => {
     };
   }
 
-  it('posts the Vietnamese verification button for a new member', async () => {
+  it('sends the Vietnamese verification button privately to a new member', async () => {
     const send = vi.fn();
     const { service } = createService();
     const verifiedRole = { id: 'verified-role-id', name: 'member' };
     const member = {
       id: 'user-id',
       user: { bot: false },
+      send,
       roles: { cache: { has: vi.fn().mockReturnValue(false) } },
       guild: {
         id: 'guild-id',
+        name: 'Test Guild',
         roles: {
           fetch: vi
             .fn()
             .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
-        },
-        channels: {
-          fetch: vi.fn().mockResolvedValue({
-            isSendable: () => true,
-            send,
-          }),
         },
       },
     } as unknown as GuildMember;
@@ -66,12 +62,12 @@ describe('UserVerificationService', () => {
     await service.handleMemberJoin(member);
 
     const message = send.mock.calls[0][0];
-    expect(message.content).toContain('<@user-id>');
+    expect(message.content).toContain('Test Guild');
     expect(message.components[0].components[0].data.label).toBe(
       'Xác thực người dùng',
     );
     expect(message.components[0].components[0].data.custom_id).toBe(
-      'user-verification:start:user-id',
+      'user-verification:start:guild-id:user-id',
     );
   });
 
@@ -81,22 +77,18 @@ describe('UserVerificationService', () => {
     const verifiedRole = { id: 'verified-role-id', name: 'member' };
     const guild = {
       id: 'guild-id',
+      name: 'Test Guild',
       roles: {
         fetch: vi
           .fn()
           .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
       },
       members: { fetch: vi.fn() },
-      channels: {
-        fetch: vi.fn().mockResolvedValue({
-          isSendable: () => true,
-          send,
-        }),
-      },
     };
     const member = {
       id: 'existing-user-id',
       user: { bot: false },
+      send,
       roles: {
         cache: {
           has: vi.fn().mockReturnValue(false),
@@ -110,7 +102,7 @@ describe('UserVerificationService', () => {
 
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: expect.stringContaining('<@existing-user-id>'),
+        content: expect.stringContaining('Test Guild'),
       }),
     );
   });
@@ -153,6 +145,7 @@ describe('UserVerificationService', () => {
     const member = {
       id: 'verified-user-id',
       user: { bot: false },
+      send,
       roles: {
         cache: {
           has: vi.fn((roleId: string) => roleId === verifiedRole.id),
@@ -171,7 +164,7 @@ describe('UserVerificationService', () => {
     const { service } = createService();
     const showModal = vi.fn();
     const interaction = {
-      customId: 'user-verification:start:user-id',
+      customId: 'user-verification:start:guild-id:user-id',
       isButton: () => true,
       inCachedGuild: () => true,
       showModal,
@@ -185,7 +178,7 @@ describe('UserVerificationService', () => {
     const modal = showModal.mock.calls[0][0] as ModalBuilder;
     expect(modal.toJSON()).toEqual(
       expect.objectContaining({
-        custom_id: 'user-verification:details:user-id',
+        custom_id: 'user-verification:details:guild-id:user-id',
         components: [
           expect.objectContaining({
             components: [
@@ -211,7 +204,7 @@ describe('UserVerificationService', () => {
     const reply = vi.fn();
     const showModal = vi.fn();
     const interaction = {
-      customId: 'user-verification:start:target-user-id',
+      customId: 'user-verification:start:guild-id:target-user-id',
       isButton: () => true,
       inCachedGuild: () => true,
       showModal,
@@ -234,7 +227,7 @@ describe('UserVerificationService', () => {
     const { service, userUpsert } = createService();
     const reply = vi.fn();
     const interaction = {
-      customId: 'user-verification:details:target-user-id',
+      customId: 'user-verification:details:guild-id:target-user-id',
       isButton: () => false,
       isModalSubmit: () => true,
       inCachedGuild: () => true,
@@ -257,7 +250,7 @@ describe('UserVerificationService', () => {
     const { service } = createService();
     const reply = vi.fn();
     const interaction = {
-      customId: 'user-verification:details:user-id',
+      customId: 'user-verification:details:guild-id:user-id',
       isButton: () => false,
       isModalSubmit: () => true,
       inCachedGuild: () => true,
@@ -285,7 +278,7 @@ describe('UserVerificationService', () => {
     const { service } = createService();
     const reply = vi.fn();
     const interaction = {
-      customId: 'user-verification:details:user-id',
+      customId: 'user-verification:details:guild-id:user-id',
       isButton: () => false,
       isModalSubmit: () => true,
       inCachedGuild: () => true,
@@ -309,7 +302,7 @@ describe('UserVerificationService', () => {
     });
   });
 
-  it('normalizes and saves the account name with the user record', async () => {
+  it('normalizes and saves a private-DM submission with the user record', async () => {
     const { service, userUpsert } = createService();
     const addRole = vi.fn();
     const role = {
@@ -320,6 +313,7 @@ describe('UserVerificationService', () => {
     };
     const fetchMember = vi.fn();
     const guild = {
+      id: 'guild-id',
       roles: {
         fetch: vi.fn().mockResolvedValue(new Map([[role.id, role]])),
       },
@@ -345,10 +339,10 @@ describe('UserVerificationService', () => {
       cccd: '037153000257',
     };
     const interaction = {
-      customId: 'user-verification:details:user-id',
+      customId: 'user-verification:details:guild-id:user-id',
       isButton: () => false,
       isModalSubmit: () => true,
-      inCachedGuild: () => true,
+      inCachedGuild: () => false,
       fields: {
         getTextInputValue: (id: string) => values[id],
       },
@@ -356,8 +350,11 @@ describe('UserVerificationService', () => {
       replied: false,
       deferReply: vi.fn(),
       editReply: vi.fn(),
-      guildId: 'guild-id',
-      guild,
+      guildId: null,
+      guild: null,
+      client: {
+        guilds: { fetch: vi.fn().mockResolvedValue(guild) },
+      },
       user: { id: 'user-id' },
     } as unknown as ModalSubmitInteraction;
 

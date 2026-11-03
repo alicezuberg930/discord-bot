@@ -35,6 +35,11 @@ const CCCD_INPUT_ID = 'cccd';
 
 type VerificationInteraction = ButtonInteraction | ModalSubmitInteraction;
 
+interface VerificationTarget {
+  guildId: string;
+  userId: string;
+}
+
 @Injectable()
 export class UserVerificationService {
   private readonly logger = new Logger(UserVerificationService.name);
@@ -154,27 +159,27 @@ export class UserVerificationService {
 
     try {
       if (interaction.isButton()) {
-        this.assertGuildInteraction(interaction);
-        const targetUserId = this.getButtonTargetUserId(interaction);
+        const target = this.getButtonTarget(interaction);
 
-        if (targetUserId !== interaction.user.id) {
+        if (!target || target.userId !== interaction.user.id) {
           await this.replyUnauthorizedButton(interaction);
           return true;
         }
 
-        await interaction.showModal(this.createDetailsModal(targetUserId));
+        await interaction.showModal(this.createDetailsModal(target));
       } else {
-        const targetUserId = this.getTargetUserId(
+        const target = this.getInteractionTarget(
           interaction.customId,
           DETAILS_MODAL_ID,
+          interaction.guildId,
         );
 
-        if (targetUserId !== interaction.user.id) {
+        if (!target || target.userId !== interaction.user.id) {
           await this.replyUnauthorizedButton(interaction);
           return true;
         }
 
-        await this.handleDetailsSubmission(interaction);
+        await this.handleDetailsSubmission(interaction, target.guildId);
       }
     } catch (error) {
       await this.respondWithError(interaction, error);
@@ -194,34 +199,54 @@ export class UserVerificationService {
           interaction.customId.startsWith(`${DETAILS_MODAL_ID}:`);
   }
 
-  private getButtonTargetUserId(interaction: ButtonInteraction): string | null {
-    const targetUserId = this.getTargetUserId(
+  private getButtonTarget(
+    interaction: ButtonInteraction,
+  ): VerificationTarget | null {
+    const target = this.getInteractionTarget(
       interaction.customId,
       START_BUTTON_ID,
+      interaction.guildId,
     );
 
-    if (targetUserId) {
-      return targetUserId;
+    if (target) {
+      return target;
     }
 
     if (
-      interaction.customId === START_BUTTON_ID ||
-      interaction.customId === LEGACY_START_BUTTON_ID
+      interaction.guildId &&
+      (interaction.customId === START_BUTTON_ID ||
+        interaction.customId === LEGACY_START_BUTTON_ID)
     ) {
-      return interaction.message.content.match(/<@!?(\d+)>/)?.[1] ?? null;
+      const userId = interaction.message.content.match(/<@!?(\d+)>/)?.[1];
+
+      return userId ? { guildId: interaction.guildId, userId } : null;
     }
 
     return null;
   }
 
-  private getTargetUserId(customId: string, baseId: string): string | null {
+  private getInteractionTarget(
+    customId: string,
+    baseId: string,
+    fallbackGuildId: string | null,
+  ): VerificationTarget | null {
     const prefix = `${baseId}:`;
 
     if (!customId.startsWith(prefix)) {
       return null;
     }
 
-    return customId.slice(prefix.length) || null;
+    const ids = customId.slice(prefix.length).split(':');
+
+    if (ids.length === 2 && ids[0] && ids[1]) {
+      return { guildId: ids[0], userId: ids[1] };
+    }
+
+    if (ids.length === 1 && ids[0] && fallbackGuildId) {
+      return { guildId: fallbackGuildId, userId: ids[0] };
+    }
+
+    return null;
   }
 
   private async replyUnauthorizedButton(
@@ -234,37 +259,20 @@ export class UserVerificationService {
   }
 
   private async postVerificationPrompt(member: GuildMember): Promise<void> {
-    const channelId = this.configService.get('VERIFICATION_CHANNEL_ID', {
-      infer: true,
+    await member.send({
+      content: `Chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Tin nhắn và biểu mẫu này chỉ hiển thị cho bạn.`,
+      components: [this.createStartButtonRow(member.guild.id, member.id)],
     });
 
-    if (!channelId) {
-      this.logger.warn(
-        'User verification is disabled because VERIFICATION_CHANNEL_ID is not configured',
-      );
-      return;
-    }
-
-    const channel = await member.guild.channels.fetch(channelId);
-
-    if (!channel?.isSendable()) {
-      this.logger.error(
-        `Verification channel ${channelId} is missing or is not sendable`,
-      );
-      return;
-    }
-
-    await channel.send({
-      content: `<@${member.id}>, chào mừng bạn! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Thông tin trong biểu mẫu chỉ hiển thị riêng tư.`,
-      components: [this.createStartButtonRow(member.id)],
-      allowedMentions: { users: [member.id] },
-    });
+    this.logger.log(
+      `Sent a private verification prompt to Discord user ${member.id} for guild ${member.guild.id}`,
+    );
   }
 
   private async handleDetailsSubmission(
     interaction: ModalSubmitInteraction,
+    guildId: string,
   ): Promise<void> {
-    this.assertGuildInteraction(interaction);
     const accountName = interaction.fields
       .getTextInputValue(ACCOUNT_NAME_INPUT_ID)
       .trim()
@@ -295,14 +303,25 @@ export class UserVerificationService {
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    const role = await this.resolveVerifiedRole(interaction.guild);
+    const guild =
+      interaction.guild?.id === guildId
+        ? interaction.guild
+        : await interaction.client.guilds.fetch(guildId);
+
+    if (!this.isConfiguredVerificationGuild(guild.id)) {
+      throw new BadRequestException(
+        'Máy chủ Discord này không được cấu hình để xác thực người dùng.',
+      );
+    }
+
+    const member = await guild.members.fetch(interaction.user.id);
+    const role = await this.resolveVerifiedRole(guild);
     await this.assertCanAssignRole(member, role);
 
     const previousEmail = await this.prisma.emailVerification.findUnique({
       where: {
         guildId_discordUserId: {
-          guildId: interaction.guildId,
+          guildId,
           discordUserId: interaction.user.id,
         },
       },
@@ -312,7 +331,7 @@ export class UserVerificationService {
     await this.prisma.user.upsert({
       where: {
         guildId_discordUserId: {
-          guildId: interaction.guildId,
+          guildId,
           discordUserId: interaction.user.id,
         },
       },
@@ -320,7 +339,7 @@ export class UserVerificationService {
         accountName,
         phone,
         cccd,
-        guildId: interaction.guildId,
+        guildId,
         discordUserId: interaction.user.id,
         email: previousEmail?.email,
       },
@@ -349,19 +368,6 @@ export class UserVerificationService {
 
     if (!member.roles.cache.has(role.id)) {
       await member.roles.add(role, 'Restored registered member role');
-    }
-  }
-
-  private assertGuildInteraction(
-    interaction: VerificationInteraction,
-  ): asserts interaction is VerificationInteraction & {
-    guildId: string;
-    guild: Guild;
-  } {
-    if (!interaction.inCachedGuild()) {
-      throw new BadRequestException(
-        'Xác thực người dùng chỉ có thể thực hiện trong máy chủ.',
-      );
     }
   }
 
@@ -422,17 +428,18 @@ export class UserVerificationService {
   }
 
   private createStartButtonRow(
+    guildId: string,
     targetUserId: string,
   ): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`${START_BUTTON_ID}:${targetUserId}`)
+        .setCustomId(`${START_BUTTON_ID}:${guildId}:${targetUserId}`)
         .setLabel('Xác thực người dùng')
         .setStyle(ButtonStyle.Primary),
     );
   }
 
-  private createDetailsModal(targetUserId: string): ModalBuilder {
+  private createDetailsModal(target: VerificationTarget): ModalBuilder {
     const accountNameInput = new TextInputBuilder()
       .setCustomId(ACCOUNT_NAME_INPUT_ID)
       .setLabel('Tên tài khoản')
@@ -459,7 +466,7 @@ export class UserVerificationService {
       .setStyle(TextInputStyle.Short);
 
     return new ModalBuilder()
-      .setCustomId(`${DETAILS_MODAL_ID}:${targetUserId}`)
+      .setCustomId(`${DETAILS_MODAL_ID}:${target.guildId}:${target.userId}`)
       .setTitle('Xác thực người dùng')
       .addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
