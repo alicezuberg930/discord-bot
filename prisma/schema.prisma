@@ -54,3 +54,21 @@ model User {
   @@map("users")
 }
 
+
+enum VerificationPromptDelivery {
+  DM
+  CHANNEL
+}
+
+/// Remembers that a member was already sent the verification button, so the
+/// startup scan of existing members does not send it again on every restart.
+model VerificationPrompt {
+  id            Int                        @id @default(autoincrement())
+  guildId       String                     @db.VarChar(32)
+  discordUserId String                     @db.VarChar(32)
+  deliveredVia  VerificationPromptDelivery @map("delivered_via")
+  promptedAt    DateTime                   @default(now()) @map("prompted_at")
+
+  @@unique([guildId, discordUserId])
+  @@map("verification_prompts")
+}

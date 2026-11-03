@@ -206,6 +206,23 @@ export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedDateTimeFilter<$PrismaModel>
 }
 
+export type EnumVerificationPromptDeliveryFilter<$PrismaModel = never> = {
+  equals?: $Enums.VerificationPromptDelivery | Prisma.EnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  in?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  notIn?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumVerificationPromptDeliveryFilter<$PrismaModel> | $Enums.VerificationPromptDelivery
+}
+
+export type EnumVerificationPromptDeliveryWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.VerificationPromptDelivery | Prisma.EnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  in?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  notIn?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumVerificationPromptDeliveryWithAggregatesFilter<$PrismaModel> | $Enums.VerificationPromptDelivery
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumVerificationPromptDeliveryFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumVerificationPromptDeliveryFilter<$PrismaModel>
+}
+
 export type NestedUuidFilter<$PrismaModel = never> = {
   equals?: string | Prisma.StringFieldRefInput<$PrismaModel>
   in?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
@@ -407,6 +424,23 @@ export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedDateTimeFilter<$PrismaModel>
   _max?: Prisma.NestedDateTimeFilter<$PrismaModel>
+}
+
+export type NestedEnumVerificationPromptDeliveryFilter<$PrismaModel = never> = {
+  equals?: $Enums.VerificationPromptDelivery | Prisma.EnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  in?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  notIn?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumVerificationPromptDeliveryFilter<$PrismaModel> | $Enums.VerificationPromptDelivery
+}
+
+export type NestedEnumVerificationPromptDeliveryWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.VerificationPromptDelivery | Prisma.EnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  in?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  notIn?: $Enums.VerificationPromptDelivery[] | Prisma.ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumVerificationPromptDeliveryWithAggregatesFilter<$PrismaModel> | $Enums.VerificationPromptDelivery
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumVerificationPromptDeliveryFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumVerificationPromptDeliveryFilter<$PrismaModel>
 }
 
 
