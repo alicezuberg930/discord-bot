@@ -120,7 +120,7 @@ describe('UserVerificationService', () => {
   }
 
   describe('new members', () => {
-    it('mentions a new member in the verification channel with a bound button and never DMs', async () => {
+    it('mentions a new member in the verification channel with the shared button and never DMs', async () => {
       const { service, promptUpsert } = createService();
       const { member, channelSend, fetchChannel, directMessage } =
         createGuild();
@@ -134,7 +134,7 @@ describe('UserVerificationService', () => {
       expect(message.content).toContain('Test Guild');
       expect(message.allowedMentions).toEqual({ users: ['user-id'] });
       expect(message.components[0].components[0].data).toMatchObject({
-        custom_id: 'user-verification:start:guild-id:user-id',
+        custom_id: PANEL_BUTTON_ID,
         label: 'Xác thực người dùng',
       });
       expect(promptUpsert).toHaveBeenCalledWith(
@@ -241,13 +241,16 @@ describe('UserVerificationService', () => {
     });
   });
 
-  describe('panel button', () => {
-    function createPanelClick(memberHasRole: boolean) {
+  describe('buttons in the server', () => {
+    function createPanelClick(
+      memberHasRole: boolean,
+      customId: string = PANEL_BUTTON_ID,
+    ) {
       const { guild, verifiedRole } = createGuild();
       const showModal = vi.fn();
       const reply = vi.fn();
       const interaction = {
-        customId: PANEL_BUTTON_ID,
+        customId,
         isButton: () => true,
         inCachedGuild: () => true,
         showModal,
@@ -292,18 +295,41 @@ describe('UserVerificationService', () => {
         flags: MessageFlags.Ephemeral,
       });
     });
+
+    it.each([
+      'user-verification:start:guild-id:another-user-id',
+      'user-verification:start',
+      'email-verification:start',
+    ])(
+      'opens the form for the clicker on an older prompt bound to someone else: %s',
+      async (customId) => {
+        const { service } = createService();
+        const { interaction, showModal, reply } = createPanelClick(
+          false,
+          customId,
+        );
+
+        await service.handleInteraction(interaction);
+
+        expect(reply).not.toHaveBeenCalled();
+        const modal = showModal.mock.calls[0][0] as ModalBuilder;
+        expect(modal.toJSON().custom_id).toBe(
+          'user-verification:details:guild-id:clicking-user-id',
+        );
+      },
+    );
   });
 
-  it('shows account name, phone, and CCCD fields in the modal', async () => {
+  it('shows account name, phone, and CCCD fields in the modal (DM button)', async () => {
     const { service } = createService();
     const showModal = vi.fn();
     const interaction = {
       customId: 'user-verification:start:guild-id:user-id',
       isButton: () => true,
-      inCachedGuild: () => true,
+      inCachedGuild: () => false,
       showModal,
-      guildId: 'guild-id',
-      guild: {},
+      guildId: null,
+      guild: null,
       user: { id: 'user-id' },
     } as unknown as ButtonInteraction;
 
@@ -333,18 +359,18 @@ describe('UserVerificationService', () => {
     );
   });
 
-  it('rejects another user clicking a verification button privately', async () => {
+  it('rejects a DM button whose recipient does not match the clicker', async () => {
     const { service } = createService();
     const reply = vi.fn();
     const showModal = vi.fn();
     const interaction = {
       customId: 'user-verification:start:guild-id:target-user-id',
       isButton: () => true,
-      inCachedGuild: () => true,
+      inCachedGuild: () => false,
       showModal,
       reply,
-      guildId: 'guild-id',
-      guild: {},
+      guildId: null,
+      guild: null,
       user: { id: 'different-user-id' },
     } as unknown as ButtonInteraction;
 

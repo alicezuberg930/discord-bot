@@ -227,10 +227,19 @@ export class UserVerificationService {
     }
 
     try {
-      if (interaction.isButton() && interaction.customId === PANEL_BUTTON_ID) {
-        await this.handlePanelButton(interaction);
+      if (interaction.isButton() && interaction.guildId) {
+        // In the server every verification button (panel, new-member
+        // prompts, legacy prompts) opens the form for whoever clicks it.
+        // The form always saves the clicker's own record, so nobody can
+        // verify on behalf of someone else.
+        await this.handleSelfVerificationButton(interaction);
       } else if (interaction.isButton()) {
-        const target = this.getButtonTarget(interaction);
+        // Buttons from earlier direct messages carry the recipient's IDs.
+        const target = this.getInteractionTarget(
+          interaction.customId,
+          START_BUTTON_ID,
+          null,
+        );
 
         if (!target || target.userId !== interaction.user.id) {
           await this.replyUnauthorizedButton(interaction);
@@ -271,32 +280,6 @@ export class UserVerificationService {
           interaction.customId.startsWith(`${DETAILS_MODAL_ID}:`);
   }
 
-  private getButtonTarget(
-    interaction: ButtonInteraction,
-  ): VerificationTarget | null {
-    const target = this.getInteractionTarget(
-      interaction.customId,
-      START_BUTTON_ID,
-      interaction.guildId,
-    );
-
-    if (target) {
-      return target;
-    }
-
-    if (
-      interaction.guildId &&
-      (interaction.customId === START_BUTTON_ID ||
-        interaction.customId === LEGACY_START_BUTTON_ID)
-    ) {
-      const userId = interaction.message.content.match(/<@!?(\d+)>/)?.[1];
-
-      return userId ? { guildId: interaction.guildId, userId } : null;
-    }
-
-    return null;
-  }
-
   private getInteractionTarget(
     customId: string,
     baseId: string,
@@ -330,8 +313,8 @@ export class UserVerificationService {
     });
   }
 
-  /** The panel button opens the form for whoever clicks it. */
-  private async handlePanelButton(
+  /** Opens the verification form for whoever clicked the button. */
+  private async handleSelfVerificationButton(
     interaction: ButtonInteraction,
   ): Promise<void> {
     if (
@@ -418,14 +401,7 @@ export class UserVerificationService {
         '**Xác thực thành viên**\n' +
         'Bấm nút **Xác thực người dùng** bên dưới để khai báo tên tài khoản, số điện thoại và số căn cước công dân. ' +
         'Biểu mẫu chỉ hiển thị riêng cho bạn. Sau khi xác thực thành công, bạn sẽ được cấp vai trò thành viên.',
-      components: [
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId(PANEL_BUTTON_ID)
-            .setLabel('Xác thực người dùng')
-            .setStyle(ButtonStyle.Primary),
-        ),
-      ],
+      components: [this.createVerificationButtonRow()],
       allowedMentions: { parse: [] },
     });
 
@@ -435,8 +411,9 @@ export class UserVerificationService {
   }
 
   /**
-   * Mentions a new member in the verification channel with a button bound to
-   * them. The form stays private; only the mention is visible to the channel.
+   * Mentions a new member in the verification channel. The button is the
+   * shared one, so it works for whoever clicks it; the form stays private and
+   * only the mention is visible to the channel.
    */
   private async postJoinPrompt(member: GuildMember): Promise<boolean> {
     const channel = await this.fetchVerificationChannel(member.guild);
@@ -447,7 +424,7 @@ export class UserVerificationService {
 
     await channel.send({
       content: `<@${member.id}>, chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Biểu mẫu chỉ hiển thị riêng cho bạn.`,
-      components: [this.createStartButtonRow(member.guild.id, member.id)],
+      components: [this.createVerificationButtonRow()],
       allowedMentions: { users: [member.id] },
     });
 
@@ -615,13 +592,11 @@ export class UserVerificationService {
     }
   }
 
-  private createStartButtonRow(
-    guildId: string,
-    targetUserId: string,
-  ): ActionRowBuilder<ButtonBuilder> {
+  /** The shared button: it opens the form for whoever clicks it. */
+  private createVerificationButtonRow(): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`${START_BUTTON_ID}:${guildId}:${targetUserId}`)
+        .setCustomId(PANEL_BUTTON_ID)
         .setLabel('Xác thực người dùng')
         .setStyle(ButtonStyle.Primary),
     );

@@ -91,9 +91,13 @@ verification channel:
   only if none is found). Anyone can click it; the form opens for the member who
   clicked. Members who already have the verified role are told so privately.
 - **New members.** When a human user joins, the bot mentions them once in the
-  verification channel with a button bound to that user. Other members who
-  click it receive a private authorization error. The prompt is recorded in
+  verification channel with the same shared button. The prompt is recorded in
   `verification_prompts`.
+- **Every button in the server opens the form for whoever clicks it** — the
+  panel, new-member prompts, and older prompts that were bound to another
+  member. The form always saves the clicker's own record, so nobody can verify
+  on behalf of someone else, and members no longer get an authorization error
+  for clicking the "wrong" button.
 - **Startup.** Existing members are not messaged individually; registered
   members who lost the verified role have it restored automatically.
 
@@ -102,7 +106,7 @@ The button opens a private modal for **Tên tài khoản**, **Số điện tho�
 structurally valid 12-digit CCCD are required. After submission, the bot upserts
 the `users` record and assigns the configured role. If an old email verification
 record exists for that Discord account, its email is copied into `users.email`.
-Buttons from earlier direct messages keep working.
+Buttons from earlier direct messages keep working for their recipient.
 
 Having an unrelated role does not skip verification. Verification events and
 startup scans are restricted to `DISCORD_GUILD_ID` because the configured
