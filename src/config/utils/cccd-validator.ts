@@ -69,8 +69,8 @@ export type CccdGender = 'Nam' | 'Nữ';
 
 export interface CccdDetails {
   value: string;
-  provinceCode: CccdProvinceCode;
-  province: string;
+  //   provinceCode: CccdProvinceCode;
+  //   province: string;
   genderCenturyCode: number;
   gender: CccdGender;
   century: number;
@@ -92,12 +92,12 @@ export function parseCccd(value: string): CccdDetails | null {
     return null;
   }
 
-  const provinceCode = normalized.slice(0, 3) as CccdProvinceCode;
-  const province = CCCD_PROVINCES[provinceCode];
+  //   const provinceCode = normalized.slice(0, 3) as CccdProvinceCode;
+  //   const province = CCCD_PROVINCES[provinceCode];
 
-  if (!province) {
-    return null;
-  }
+  //   if (!province) {
+  //     return null;
+  //   }
 
   const genderCenturyCode = Number(normalized[3]);
   const centuryIndex = Math.floor(genderCenturyCode / 2);
@@ -105,8 +105,8 @@ export function parseCccd(value: string): CccdDetails | null {
 
   return {
     value: normalized,
-    provinceCode,
-    province,
+    // provinceCode,
+    // province,
     genderCenturyCode,
     gender: genderCenturyCode % 2 === 0 ? 'Nam' : 'Nữ',
     century: 20 + centuryIndex,

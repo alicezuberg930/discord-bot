@@ -155,8 +155,25 @@ export class UserVerificationService {
     try {
       if (interaction.isButton()) {
         this.assertGuildInteraction(interaction);
-        await interaction.showModal(this.createDetailsModal());
+        const targetUserId = this.getButtonTargetUserId(interaction);
+
+        if (targetUserId !== interaction.user.id) {
+          await this.replyUnauthorizedButton(interaction);
+          return true;
+        }
+
+        await interaction.showModal(this.createDetailsModal(targetUserId));
       } else {
+        const targetUserId = this.getTargetUserId(
+          interaction.customId,
+          DETAILS_MODAL_ID,
+        );
+
+        if (targetUserId !== interaction.user.id) {
+          await this.replyUnauthorizedButton(interaction);
+          return true;
+        }
+
         await this.handleDetailsSubmission(interaction);
       }
     } catch (error) {
@@ -171,8 +188,49 @@ export class UserVerificationService {
   ): boolean {
     return interaction.isButton()
       ? interaction.customId === START_BUTTON_ID ||
-          interaction.customId === LEGACY_START_BUTTON_ID
-      : interaction.customId === DETAILS_MODAL_ID;
+          interaction.customId === LEGACY_START_BUTTON_ID ||
+          interaction.customId.startsWith(`${START_BUTTON_ID}:`)
+      : interaction.customId === DETAILS_MODAL_ID ||
+          interaction.customId.startsWith(`${DETAILS_MODAL_ID}:`);
+  }
+
+  private getButtonTargetUserId(interaction: ButtonInteraction): string | null {
+    const targetUserId = this.getTargetUserId(
+      interaction.customId,
+      START_BUTTON_ID,
+    );
+
+    if (targetUserId) {
+      return targetUserId;
+    }
+
+    if (
+      interaction.customId === START_BUTTON_ID ||
+      interaction.customId === LEGACY_START_BUTTON_ID
+    ) {
+      return interaction.message.content.match(/<@!?(\d+)>/)?.[1] ?? null;
+    }
+
+    return null;
+  }
+
+  private getTargetUserId(customId: string, baseId: string): string | null {
+    const prefix = `${baseId}:`;
+
+    if (!customId.startsWith(prefix)) {
+      return null;
+    }
+
+    return customId.slice(prefix.length) || null;
+  }
+
+  private async replyUnauthorizedButton(
+    interaction: VerificationInteraction,
+  ): Promise<void> {
+    await interaction.reply({
+      content: 'Bạn không có quyền nhấn nút xác thực này',
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   private async postVerificationPrompt(member: GuildMember): Promise<void> {
@@ -198,7 +256,7 @@ export class UserVerificationService {
 
     await channel.send({
       content: `<@${member.id}>, chào mừng bạn! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Thông tin trong biểu mẫu chỉ hiển thị riêng tư.`,
-      components: [this.createStartButtonRow()],
+      components: [this.createStartButtonRow(member.id)],
       allowedMentions: { users: [member.id] },
     });
   }
@@ -363,16 +421,18 @@ export class UserVerificationService {
     }
   }
 
-  private createStartButtonRow(): ActionRowBuilder<ButtonBuilder> {
+  private createStartButtonRow(
+    targetUserId: string,
+  ): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(START_BUTTON_ID)
+        .setCustomId(`${START_BUTTON_ID}:${targetUserId}`)
         .setLabel('Xác thực người dùng')
         .setStyle(ButtonStyle.Primary),
     );
   }
 
-  private createDetailsModal(): ModalBuilder {
+  private createDetailsModal(targetUserId: string): ModalBuilder {
     const accountNameInput = new TextInputBuilder()
       .setCustomId(ACCOUNT_NAME_INPUT_ID)
       .setLabel('Tên tài khoản')
@@ -399,7 +459,7 @@ export class UserVerificationService {
       .setStyle(TextInputStyle.Short);
 
     return new ModalBuilder()
-      .setCustomId(DETAILS_MODAL_ID)
+      .setCustomId(`${DETAILS_MODAL_ID}:${targetUserId}`)
       .setTitle('Xác thực người dùng')
       .addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(

@@ -86,6 +86,10 @@ nhân dân**. A valid Vietnamese mobile-number format and a structurally valid
 and assigns the configured role. If an old email verification record exists for
 that Discord account, its email is copied into `users.email`.
 
+Each verification button and its modal are bound to the mentioned Discord user.
+Other members who click the button receive a private authorization error and
+cannot open or submit that user's verification form.
+
 When the bot starts or is added to a guild, it also checks members who joined
 before the bot. Members without the configured verified role receive the same
 verification button; registered members have that role restored automatically.

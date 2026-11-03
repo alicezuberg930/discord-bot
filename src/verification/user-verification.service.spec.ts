@@ -70,6 +70,9 @@ describe('UserVerificationService', () => {
     expect(message.components[0].components[0].data.label).toBe(
       'Xác thực người dùng',
     );
+    expect(message.components[0].components[0].data.custom_id).toBe(
+      'user-verification:start:user-id',
+    );
   });
 
   it('prompts members who joined before the bot and lack the verified role', async () => {
@@ -168,12 +171,13 @@ describe('UserVerificationService', () => {
     const { service } = createService();
     const showModal = vi.fn();
     const interaction = {
-      customId: 'user-verification:start',
+      customId: 'user-verification:start:user-id',
       isButton: () => true,
       inCachedGuild: () => true,
       showModal,
       guildId: 'guild-id',
       guild: {},
+      user: { id: 'user-id' },
     } as unknown as ButtonInteraction;
 
     await service.handleInteraction(interaction);
@@ -181,6 +185,7 @@ describe('UserVerificationService', () => {
     const modal = showModal.mock.calls[0][0] as ModalBuilder;
     expect(modal.toJSON()).toEqual(
       expect.objectContaining({
+        custom_id: 'user-verification:details:user-id',
         components: [
           expect.objectContaining({
             components: [
@@ -201,11 +206,58 @@ describe('UserVerificationService', () => {
     );
   });
 
+  it('rejects another user clicking a verification button privately', async () => {
+    const { service } = createService();
+    const reply = vi.fn();
+    const showModal = vi.fn();
+    const interaction = {
+      customId: 'user-verification:start:target-user-id',
+      isButton: () => true,
+      inCachedGuild: () => true,
+      showModal,
+      reply,
+      guildId: 'guild-id',
+      guild: {},
+      user: { id: 'different-user-id' },
+    } as unknown as ButtonInteraction;
+
+    await service.handleInteraction(interaction);
+
+    expect(showModal).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith({
+      content: 'Bạn không có quyền nhấn nút xác thực này',
+      flags: MessageFlags.Ephemeral,
+    });
+  });
+
+  it('rejects another user submitting a user-bound verification modal', async () => {
+    const { service, userUpsert } = createService();
+    const reply = vi.fn();
+    const interaction = {
+      customId: 'user-verification:details:target-user-id',
+      isButton: () => false,
+      isModalSubmit: () => true,
+      inCachedGuild: () => true,
+      reply,
+      guildId: 'guild-id',
+      guild: {},
+      user: { id: 'different-user-id' },
+    } as unknown as ModalSubmitInteraction;
+
+    await service.handleInteraction(interaction);
+
+    expect(userUpsert).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith({
+      content: 'Bạn không có quyền nhấn nút xác thực này',
+      flags: MessageFlags.Ephemeral,
+    });
+  });
+
   it('rejects an invalid Vietnamese phone number privately', async () => {
     const { service } = createService();
     const reply = vi.fn();
     const interaction = {
-      customId: 'user-verification:details',
+      customId: 'user-verification:details:user-id',
       isButton: () => false,
       isModalSubmit: () => true,
       inCachedGuild: () => true,
@@ -233,7 +285,7 @@ describe('UserVerificationService', () => {
     const { service } = createService();
     const reply = vi.fn();
     const interaction = {
-      customId: 'user-verification:details',
+      customId: 'user-verification:details:user-id',
       isButton: () => false,
       isModalSubmit: () => true,
       inCachedGuild: () => true,
@@ -293,7 +345,7 @@ describe('UserVerificationService', () => {
       cccd: '037153000257',
     };
     const interaction = {
-      customId: 'user-verification:details',
+      customId: 'user-verification:details:user-id',
       isButton: () => false,
       isModalSubmit: () => true,
       inCachedGuild: () => true,
