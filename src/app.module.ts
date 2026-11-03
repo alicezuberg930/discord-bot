@@ -4,6 +4,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { validateEnvironment } from './config/environment.js';
 import { DiscordModule } from './discord/discord.module.js';
+import { ExcelExportModule } from './export/excel-export.module.js';
 import { GeminiModule } from './gemini/gemini.module.js';
 import { QuestionModule } from './question/question.module.js';
 
@@ -17,6 +18,7 @@ import { QuestionModule } from './question/question.module.js';
     GeminiModule,
     DiscordModule,
     QuestionModule,
+    ExcelExportModule,
   ],
   controllers: [AppController],
   providers: [AppService],
