@@ -18,7 +18,7 @@ import {
 } from 'discord.js';
 import type { EnvironmentVariables } from '../config/environment.js';
 import { GeminiService } from '../gemini/gemini.service.js';
-import { EmailVerificationService } from '../verification/email-verification.service.js';
+import { UserVerificationService } from '../verification/user-verification.service.js';
 import { splitDiscordMarkdown } from './discord-markdown.js';
 
 export interface DiscordPingResponse {
@@ -45,7 +45,7 @@ export class DiscordService
   constructor(
     private readonly configService: ConfigService<EnvironmentVariables, true>,
     private readonly geminiService: GeminiService,
-    private readonly emailVerificationService: EmailVerificationService,
+    private readonly userVerificationService: UserVerificationService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -71,20 +71,13 @@ export class DiscordService
     });
 
     this.client.on(Events.GuildMemberAdd, async (member) => {
-      await this.emailVerificationService.handleMemberJoin(member);
-    });
-
-    this.client.on(Events.GuildMemberRemove, async (member) => {
-      await this.emailVerificationService.removeMember(
-        member.guild.id,
-        member.id,
-      );
+      await this.userVerificationService.handleMemberJoin(member);
     });
 
     this.client.on(Events.InteractionCreate, async (interaction) => {
       if (interaction.isButton() || interaction.isModalSubmit()) {
         const handled =
-          await this.emailVerificationService.handleInteraction(interaction);
+          await this.userVerificationService.handleInteraction(interaction);
 
         if (handled) {
           return;

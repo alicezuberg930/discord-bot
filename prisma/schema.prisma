@@ -39,3 +39,17 @@ model EmailVerification {
   @@map("email_verifications")
 }
 
+model User {
+  id            Int      @id @default(autoincrement())
+  phone         String   @db.VarChar(32)
+  cccd          String   @db.VarChar(32)
+  guildId       String   @db.VarChar(32)
+  discordUserId String   @db.VarChar(32)
+  email         String?  @db.VarChar(254)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("update_at")
+
+  @@unique([guildId, discordUserId])
+  @@map("users")
+}
+

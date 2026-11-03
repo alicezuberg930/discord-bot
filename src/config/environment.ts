@@ -2,7 +2,6 @@ export interface EnvironmentVariables {
   PORT: number;
   DATABASE_ENABLED: boolean;
   DATABASE_URL?: string;
-  OTP_HASH_SECRET?: string;
   DISCORD_ENABLED: boolean;
   DISCORD_TOKEN?: string;
   DISCORD_CLIENT_ID?: string;
@@ -12,15 +11,6 @@ export interface EnvironmentVariables {
   VERIFICATION_CHANNEL_ID?: string;
   VERIFIED_ROLE_ID?: string;
   VERIFIED_ROLE_NAME: string;
-  EMAIL_OTP_TTL_SECONDS: number;
-  EMAIL_OTP_MAX_ATTEMPTS: number;
-  EMAIL_OTP_RESEND_SECONDS: number;
-  SMTP_HOST?: string;
-  SMTP_PORT: number;
-  SMTP_SECURE: boolean;
-  SMTP_USER?: string;
-  SMTP_PASS?: string;
-  SMTP_FROM?: string;
 }
 
 const PLACEHOLDER_PREFIX = 'replace-with-';
@@ -121,9 +111,6 @@ export function validateEnvironment(
     DATABASE_URL: databaseEnabled
       ? requiredString(config, 'DATABASE_URL')
       : optionalConfiguredString(config, 'DATABASE_URL'),
-    OTP_HASH_SECRET: databaseEnabled
-      ? requiredString(config, 'OTP_HASH_SECRET')
-      : optionalConfiguredString(config, 'OTP_HASH_SECRET'),
     DISCORD_ENABLED: discordEnabled,
     DISCORD_TOKEN: discordToken,
     DISCORD_CLIENT_ID: discordClientId,
@@ -135,32 +122,5 @@ export function validateEnvironment(
     VERIFIED_ROLE_ID: optionalString(config, 'VERIFIED_ROLE_ID'),
     VERIFIED_ROLE_NAME:
       optionalString(config, 'VERIFIED_ROLE_NAME') ?? 'member',
-    EMAIL_OTP_TTL_SECONDS: integerValue(
-      config,
-      'EMAIL_OTP_TTL_SECONDS',
-      600,
-      60,
-      3_600,
-    ),
-    EMAIL_OTP_MAX_ATTEMPTS: integerValue(
-      config,
-      'EMAIL_OTP_MAX_ATTEMPTS',
-      5,
-      1,
-      10,
-    ),
-    EMAIL_OTP_RESEND_SECONDS: integerValue(
-      config,
-      'EMAIL_OTP_RESEND_SECONDS',
-      60,
-      10,
-      600,
-    ),
-    SMTP_HOST: optionalConfiguredString(config, 'SMTP_HOST'),
-    SMTP_PORT: integerValue(config, 'SMTP_PORT', 587, 1, 65_535),
-    SMTP_SECURE: booleanValue(config, 'SMTP_SECURE', false),
-    SMTP_USER: optionalConfiguredString(config, 'SMTP_USER'),
-    SMTP_PASS: optionalConfiguredString(config, 'SMTP_PASS'),
-    SMTP_FROM: optionalConfiguredString(config, 'SMTP_FROM'),
   };
 }

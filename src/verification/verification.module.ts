@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../database/prisma.module.js';
-import { EmailModule } from '../email/email.module.js';
-import { EmailVerificationService } from './email-verification.service.js';
+import { UserVerificationService } from './user-verification.service.js';
 
 @Module({
-  imports: [EmailModule, PrismaModule],
-  providers: [EmailVerificationService],
-  exports: [EmailVerificationService],
+  imports: [PrismaModule],
+  providers: [UserVerificationService],
+  exports: [UserVerificationService],
 })
 export class VerificationModule {}

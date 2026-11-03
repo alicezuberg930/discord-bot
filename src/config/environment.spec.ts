@@ -14,7 +14,6 @@ describe('validateEnvironment', () => {
       PORT: 4000,
       DATABASE_ENABLED: false,
       DATABASE_URL: undefined,
-      OTP_HASH_SECRET: undefined,
       DISCORD_ENABLED: true,
       DISCORD_TOKEN: 'a-real-token',
       DISCORD_CLIENT_ID: '123456789012345678',
@@ -24,15 +23,6 @@ describe('validateEnvironment', () => {
       VERIFICATION_CHANNEL_ID: undefined,
       VERIFIED_ROLE_ID: undefined,
       VERIFIED_ROLE_NAME: 'member',
-      EMAIL_OTP_TTL_SECONDS: 600,
-      EMAIL_OTP_MAX_ATTEMPTS: 5,
-      EMAIL_OTP_RESEND_SECONDS: 60,
-      SMTP_HOST: undefined,
-      SMTP_PORT: 587,
-      SMTP_SECURE: false,
-      SMTP_USER: undefined,
-      SMTP_PASS: undefined,
-      SMTP_FROM: undefined,
     });
   });
 

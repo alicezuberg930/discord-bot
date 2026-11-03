@@ -1,8 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import {
-  EmailVerificationStatus,
-  PrismaClient,
-} from '../dist/generated/prisma/client.js';
+import { PrismaClient } from '../dist/generated/prisma/client.js';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -19,26 +16,28 @@ const key = {
 };
 
 try {
-  await database.emailVerification.upsert({
+  await database.user.upsert({
     where: { guildId_discordUserId: key },
     create: {
       ...key,
-      status: EmailVerificationStatus.UNVERIFIED,
+      phone: '0912345678',
+      cccd: '012345678901',
     },
     update: {
-      status: EmailVerificationStatus.UNVERIFIED,
+      phone: '0912345678',
+      cccd: '012345678901',
     },
   });
-  const record = await database.emailVerification.findUnique({
+  const record = await database.user.findUnique({
     where: { guildId_discordUserId: key },
   });
 
   console.log({
     write: true,
-    read: record?.status === EmailVerificationStatus.UNVERIFIED,
+    read: record?.phone === '0912345678',
   });
 } finally {
-  await database.emailVerification.deleteMany({ where: key });
+  await database.user.deleteMany({ where: key });
   await database.$disconnect();
 }
 

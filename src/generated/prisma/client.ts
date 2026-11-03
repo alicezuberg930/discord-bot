@@ -46,3 +46,8 @@ export { Prisma }
  * 
  */
 export type EmailVerification = Prisma.EmailVerificationModel
+/**
+ * Model User
+ * 
+ */
+export type User = Prisma.UserModel

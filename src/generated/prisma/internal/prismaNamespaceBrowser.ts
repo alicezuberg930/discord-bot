@@ -51,7 +51,8 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-  EmailVerification: 'EmailVerification'
+  EmailVerification: 'EmailVerification',
+  User: 'User'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -91,6 +92,20 @@ export const EmailVerificationScalarFieldEnum = {
 } as const
 
 export type EmailVerificationScalarFieldEnum = (typeof EmailVerificationScalarFieldEnum)[keyof typeof EmailVerificationScalarFieldEnum]
+
+
+export const UserScalarFieldEnum = {
+  id: 'id',
+  phone: 'phone',
+  cccd: 'cccd',
+  guildId: 'guildId',
+  discordUserId: 'discordUserId',
+  email: 'email',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
 
 
 export const SortOrder = {

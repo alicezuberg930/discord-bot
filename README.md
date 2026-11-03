@@ -3,9 +3,9 @@
 A small NestJS 12 application that connects to Discord through `discord.js` and
 provides `/ping` and Gemini-powered `/question` slash commands. The HTTP server
 exposes health at `GET /`, Discord status at `GET /ping`, and Gemini questions at
-`POST /question`. New members can also complete private email OTP verification
-to receive the `member` role. Verification identity, OTP expiry, attempts, and
-status are persisted through Prisma in PostgreSQL.
+`POST /question`. New members can submit their Vietnamese phone number and CCCD
+through a private modal to receive the `member` role. Registration data is
+persisted through Prisma in PostgreSQL.
 
 ## Requirements
 
@@ -37,10 +37,10 @@ npm run db:smoke     # disposable write/read/delete connectivity check
 npm run db:down      # stop PostgreSQL while preserving its volume
 ```
 
-Each guild/user record stores the normalized and masked email, verification
-status, hashed OTP, OTP expiry, resend time, attempts remaining, verified role,
-join/leave timestamps, and verification timestamp. Verified users who rejoin are
-recognized from PostgreSQL and have their role restored automatically.
+The `users` table stores an auto-incrementing ID, phone, CCCD, guild ID, Discord
+user ID, optional previously known email, `created_at`, and `update_at`. Registered
+users who rejoin are recognized from PostgreSQL and have their role restored
+automatically.
 
 ## Configure Discord
 
@@ -62,7 +62,7 @@ recognized from PostgreSQL and have their role restored automatically.
    scopes, then use the generated URL to invite the bot to your server. `/ping`
    needs no additional bot permissions.
 
-## Configure email verification
+## Configure user verification
 
 1. In **Discord Developer Portal → Bot → Privileged Gateway Intents**, enable
    **Server Members Intent**.
@@ -77,26 +77,18 @@ recognized from PostgreSQL and have their role restored automatically.
    ```
 
    `VERIFIED_ROLE_ID` is recommended if multiple roles could have the same name.
-4. Add SMTP credentials. For a provider using STARTTLS on port 587:
-
-   ```dotenv
-   SMTP_HOST=smtp.example.com
-   SMTP_PORT=587
-   SMTP_SECURE=false
-   SMTP_USER=your-smtp-username
-   SMTP_PASS=your-smtp-password-or-app-password
-   SMTP_FROM=verification@example.com
-   ```
-
-For providers using implicit TLS on port 465, set `SMTP_PORT=465` and
-`SMTP_SECURE=true`.
 
 When a human user joins with only the `@everyone` role, the bot mentions them in
-the verification channel with a button. The button opens a private email modal.
-After an OTP is delivered and entered correctly, the bot assigns the configured
-role. OTPs expire after 10 minutes, have five attempts, and have a 60-second
-resend cooldown by default. The normalized email is retained to map the Discord
-user to their verified identity; the plaintext OTP is never stored.
+the verification channel with the **Xác thực người dùng** button. The button opens
+a private modal for **Số điện thoại** and **Căn cước nhân dân**. A valid Vietnamese
+mobile-number format and a 12-digit CCCD are required. After submission, the bot
+upserts the `users` record and assigns the configured role. If an old email
+verification record exists for that Discord account, its email is copied into
+`users.email`.
+
+Phone numbers and CCCDs are sensitive personal data and are stored as plain
+strings in PostgreSQL as requested. Restrict database access, backups, and Prisma
+Studio to trusted administrators, and define an appropriate retention policy.
 
 ## Configure Gemini
 
@@ -160,25 +152,15 @@ npm run start:prod
 | `PORT` | No | HTTP port; defaults to `3000`. |
 | `DATABASE_ENABLED` | No | Enables PostgreSQL persistence; defaults to `true`. |
 | `DATABASE_URL` | Yes | Prisma PostgreSQL connection string. |
-| `OTP_HASH_SECRET` | Yes | Persistent secret used to HMAC OTPs before storage. |
 | `DISCORD_ENABLED` | No | Set to `false` to run without connecting to Discord. |
 | `DISCORD_TOKEN` | Yes when enabled | Secret bot token from the Bot page. |
 | `DISCORD_CLIENT_ID` | Yes when enabled | Discord application ID. |
 | `DISCORD_GUILD_ID` | No | Test server ID for immediate guild-scoped command registration. |
 | `GEMINI_API_KEY` | For `/question` | Server-side key from Google AI Studio. |
 | `GEMINI_MODEL` | No | Gemini model; defaults to `gemini-flash-latest`. |
-| `VERIFICATION_CHANNEL_ID` | For email verification | Channel where new members receive the verification button. |
+| `VERIFICATION_CHANNEL_ID` | For user verification | Channel where new members receive the verification button. |
 | `VERIFIED_ROLE_ID` | Recommended | Exact role to assign after successful verification. |
 | `VERIFIED_ROLE_NAME` | No | Role name fallback; defaults to `member`. |
-| `EMAIL_OTP_TTL_SECONDS` | No | OTP lifetime; defaults to `600`. |
-| `EMAIL_OTP_MAX_ATTEMPTS` | No | Incorrect attempts allowed; defaults to `5`. |
-| `EMAIL_OTP_RESEND_SECONDS` | No | Resend cooldown; defaults to `60`. |
-| `SMTP_HOST` | For email verification | SMTP server hostname. |
-| `SMTP_PORT` | No | SMTP port; defaults to `587`. |
-| `SMTP_SECURE` | No | Use implicit TLS, normally `true` only for port 465. |
-| `SMTP_USER` | For email verification | SMTP username. |
-| `SMTP_PASS` | For email verification | SMTP password or provider app password. |
-| `SMTP_FROM` | For email verification | Sender address displayed on OTP emails. |
 
 `.env` is ignored by Git. Keep both API credentials private. If the Discord token
 is exposed, reset it in the Discord Developer Portal; if the Gemini key is
