@@ -4,6 +4,8 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { validateEnvironment } from './config/environment.js';
 import { DiscordModule } from './discord/discord.module.js';
+import { GeminiModule } from './gemini/gemini.module.js';
+import { QuestionModule } from './question/question.module.js';
 
 @Module({
   imports: [
@@ -12,7 +14,9 @@ import { DiscordModule } from './discord/discord.module.js';
       isGlobal: true,
       validate: validateEnvironment,
     }),
+    GeminiModule,
     DiscordModule,
+    QuestionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

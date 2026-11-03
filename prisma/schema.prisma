@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EmailVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  EXPIRED
+  LOCKED
+}
+
+model EmailVerification {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  guildId             String                  @db.VarChar(32)
+  discordUserId       String                  @db.VarChar(32)
+  email               String?                 @db.VarChar(254)
+  emailMasked         String?                 @db.VarChar(254)
+  status              EmailVerificationStatus @default(UNVERIFIED)
+  otpHash             String?                 @db.Char(64)
+  otpExpiresAt        DateTime?
+  resendAvailableAt   DateTime?
+  attemptsRemaining   Int                     @default(0)
+  verifiedAt          DateTime?
+  verifiedRoleId      String?                 @db.VarChar(32)
+  joinedAt            DateTime                @default(now())
+  leftAt              DateTime?
+  lastPromptedAt      DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@unique([guildId, discordUserId])
+  @@index([status, otpExpiresAt])
+  @@map("email_verifications")
+}
+

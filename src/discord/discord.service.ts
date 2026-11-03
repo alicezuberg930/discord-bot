@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   OnApplicationBootstrap,
@@ -9,11 +10,16 @@ import {
   Client,
   Events,
   GatewayIntentBits,
+  MessageFlags,
   REST,
   Routes,
   SlashCommandBuilder,
+  type ChatInputCommandInteraction,
 } from 'discord.js';
 import type { EnvironmentVariables } from '../config/environment.js';
+import { GeminiService } from '../gemini/gemini.service.js';
+import { EmailVerificationService } from '../verification/email-verification.service.js';
+import { splitDiscordMarkdown } from './discord-markdown.js';
 
 export interface DiscordPingResponse {
   status: 'online' | 'offline' | 'disabled';
@@ -33,11 +39,13 @@ export class DiscordService
 {
   private readonly logger = new Logger(DiscordService.name);
   private readonly client = new Client({
-    intents: [GatewayIntentBits.Guilds],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
   });
 
   constructor(
     private readonly configService: ConfigService<EnvironmentVariables, true>,
+    private readonly geminiService: GeminiService,
+    private readonly emailVerificationService: EmailVerificationService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -62,21 +70,44 @@ export class DiscordService
       this.logger.error('Discord client error', error.stack);
     });
 
+    this.client.on(Events.GuildMemberAdd, async (member) => {
+      await this.emailVerificationService.handleMemberJoin(member);
+    });
+
+    this.client.on(Events.GuildMemberRemove, async (member) => {
+      await this.emailVerificationService.removeMember(
+        member.guild.id,
+        member.id,
+      );
+    });
+
     this.client.on(Events.InteractionCreate, async (interaction) => {
-      if (
-        !interaction.isChatInputCommand() ||
-        interaction.commandName !== 'ping'
-      ) {
+      if (interaction.isButton() || interaction.isModalSubmit()) {
+        const handled =
+          await this.emailVerificationService.handleInteraction(interaction);
+
+        if (handled) {
+          return;
+        }
+      }
+
+      if (!interaction.isChatInputCommand()) {
         return;
       }
 
       try {
-        await interaction.reply(
-          `Pong! Gateway latency: ${interaction.client.ws.ping}ms`,
-        );
+        if (interaction.commandName === 'ping') {
+          await interaction.reply(
+            `Pong! Gateway latency: ${interaction.client.ws.ping}ms`,
+          );
+          return;
+        }
+
+        if (interaction.commandName === 'question') {
+          await this.answerQuestion(interaction);
+        }
       } catch (error) {
-        const stack = error instanceof Error ? error.stack : String(error);
-        this.logger.error('Failed to handle /ping', stack);
+        await this.handleInteractionError(interaction, error);
       }
     });
 
@@ -123,6 +154,17 @@ export class DiscordService
         .setName('ping')
         .setDescription('Check whether the bot is online')
         .toJSON(),
+      new SlashCommandBuilder()
+        .setName('question')
+        .setDescription('Ask Gemini a question')
+        .addStringOption((option) =>
+          option
+            .setName('text')
+            .setDescription('The question to send to Gemini')
+            .setRequired(true)
+            .setMaxLength(4_000),
+        )
+        .toJSON(),
     ];
     const route = guildId
       ? Routes.applicationGuildCommands(clientId, guildId)
@@ -134,9 +176,55 @@ export class DiscordService
 
     this.logger.log(
       guildId
-        ? `Registered /ping in Discord guild ${guildId}`
-        : 'Registered /ping globally (Discord may take time to propagate it)',
+        ? `Registered /ping and /question in Discord guild ${guildId}`
+        : 'Registered /ping and /question globally (Discord may take time to propagate them)',
     );
+  }
+
+  private async answerQuestion(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    const question = interaction.options.getString('text', true);
+    await interaction.deferReply();
+
+    const result = await this.geminiService.ask(question);
+    const chunks = splitDiscordMarkdown(result.answer);
+
+    await interaction.editReply(chunks[0]);
+
+    for (const chunk of chunks.slice(1)) {
+      await interaction.followUp(chunk);
+    }
+  }
+
+  private async handleInteractionError(
+    interaction: ChatInputCommandInteraction,
+    error: unknown,
+  ): Promise<void> {
+    const stack = error instanceof Error ? error.stack : String(error);
+    const userMessage =
+      error instanceof HttpException
+        ? error.message
+        : 'The command could not be completed. Please try again.';
+    this.logger.error(`Failed to handle /${interaction.commandName}`, stack);
+
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(userMessage);
+      } else {
+        await interaction.reply({
+          content: userMessage,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    } catch (replyError) {
+      const replyStack =
+        replyError instanceof Error ? replyError.stack : String(replyError);
+      this.logger.error(
+        'Failed to send the command error response',
+        replyStack,
+      );
+    }
   }
 
   private disconnectedPingResponse(

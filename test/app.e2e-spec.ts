@@ -33,6 +33,18 @@ describe('AppController (e2e)', () => {
     });
   });
 
+  it('/question (POST) validates its request body', () => {
+    return request(app.getHttpServer())
+      .post('/question')
+      .send({ question: '' })
+      .expect(400)
+      .expect({
+        message: 'question must be a non-empty string',
+        error: 'Bad Request',
+        statusCode: 400,
+      });
+  });
+
   afterEach(async () => {
     await app.close();
   });

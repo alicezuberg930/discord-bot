@@ -6,6 +6,7 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     env: {
+      DATABASE_ENABLED: 'false',
       DISCORD_ENABLED: 'false',
     },
     globals: true,
