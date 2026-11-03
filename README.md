@@ -77,22 +77,33 @@ their role restored automatically.
    ```
 
    `VERIFIED_ROLE_ID` is recommended if multiple roles could have the same name.
+4. Let members **without** the verified role see the verification channel, and
+   give the bot **View Channel**, **Send Messages**, and **Read Message
+   History** there.
 
-When a human user joins with only the `@everyone` role, the bot mentions them in
-the verification channel with the **Xác thực người dùng** button. The button
-opens a private modal for **Tên tài khoản**, **Số điện thoại**, and **Căn cước
-nhân dân**. A valid Vietnamese mobile-number format and a structurally valid
-12-digit CCCD are required. After submission, the bot upserts the `users` record
-and assigns the configured role. If an old email verification record exists for
-that Discord account, its email is copied into `users.email`.
+The bot **never sends direct messages**. Bulk DMs get bots flagged and
+quarantined by Discord's anti-spam system, so every prompt lives in the
+verification channel:
 
-Each verification button and its modal are bound to the mentioned Discord user.
-Other members who click the button receive a private authorization error and
-cannot open or submit that user's verification form.
+- **Verification panel.** When the bot starts or is added to the guild, it makes
+  sure one panel message with the **Xác thực người dùng** button exists in the
+  verification channel (it looks at the last 100 messages and posts a new panel
+  only if none is found). Anyone can click it; the form opens for the member who
+  clicked. Members who already have the verified role are told so privately.
+- **New members.** When a human user joins, the bot mentions them once in the
+  verification channel with a button bound to that user. Other members who
+  click it receive a private authorization error. The prompt is recorded in
+  `verification_prompts`.
+- **Startup.** Existing members are not messaged individually; registered
+  members who lost the verified role have it restored automatically.
 
-When the bot starts or is added to a guild, it also checks members who joined
-before the bot. Members without the configured verified role receive the same
-verification button; registered members have that role restored automatically.
+The button opens a private modal for **Tên tài khoản**, **Số điện thoại**, and
+**Căn cước nhân dân**. A valid Vietnamese mobile-number format and a
+structurally valid 12-digit CCCD are required. After submission, the bot upserts
+the `users` record and assigns the configured role. If an old email verification
+record exists for that Discord account, its email is copied into `users.email`.
+Buttons from earlier direct messages keep working.
+
 Having an unrelated role does not skip verification. Verification events and
 startup scans are restricted to `DISCORD_GUILD_ID` because the configured
 channel and role IDs belong to that guild.
@@ -169,7 +180,7 @@ npm run start:prod
 | `DISCORD_GUILD_ID` | No | Test server ID for immediate guild-scoped command registration. |
 | `GEMINI_API_KEY` | For `/question` | Server-side key from Google AI Studio. |
 | `GEMINI_MODEL` | No | Gemini model; defaults to `gemini-flash-latest`. |
-| `VERIFICATION_CHANNEL_ID` | For user verification | Channel where new members receive the verification button. |
+| `VERIFICATION_CHANNEL_ID` | For user verification | Channel that holds the verification panel and new-member prompts. |
 | `VERIFIED_ROLE_ID` | Recommended | Exact role to assign after successful verification. |
 | `VERIFIED_ROLE_NAME` | No | Role name fallback; defaults to `member`. |
 

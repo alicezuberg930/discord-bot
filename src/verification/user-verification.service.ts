@@ -10,11 +10,9 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  DiscordAPIError,
   MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
-  RESTJSONErrorCodes,
   TextInputBuilder,
   TextInputStyle,
   type ButtonInteraction,
@@ -30,6 +28,8 @@ import { PrismaService } from '../database/prisma.service.js';
 import { VerificationPromptDelivery } from '../generated/prisma/client.js';
 
 const START_BUTTON_ID = 'user-verification:start';
+/** Shared button on the persistent panel; it targets whoever clicks it. */
+const PANEL_BUTTON_ID = 'user-verification:panel';
 const LEGACY_START_BUTTON_ID = 'email-verification:start';
 const DETAILS_MODAL_ID = 'user-verification:details';
 const ACCOUNT_NAME_INPUT_ID = 'account_name';
@@ -43,8 +43,7 @@ interface VerificationTarget {
   userId: string;
 }
 
-type PreparationResult =
-  'verified' | 'restored' | 'prompted' | 'alreadyPrompted' | 'notSent';
+type MemberCheckResult = 'verified' | 'restored' | 'awaiting';
 
 @Injectable()
 export class UserVerificationService {
@@ -56,6 +55,11 @@ export class UserVerificationService {
     private readonly prisma: PrismaService,
   ) {}
 
+  /**
+   * A new (or returning) member gets one mention in the verification channel
+   * with a button bound to them. The bot never sends direct messages: bulk DMs
+   * get bots flagged by Discord's anti-spam system.
+   */
   async handleMemberJoin(member: GuildMember): Promise<void> {
     if (
       member.user.bot ||
@@ -64,13 +68,29 @@ export class UserVerificationService {
       return;
     }
 
+    const memberKey = `${member.guild.id}:${member.id}`;
+
+    if (this.handledMembers.has(memberKey)) {
+      return;
+    }
+
+    this.handledMembers.add(memberKey);
+
     try {
       const role = await this.resolveVerifiedRole(member.guild);
-      // A (re)joining member is always welcomed with a fresh prompt.
-      await this.prepareMemberVerification(member, role, {
-        skipIfAlreadyPrompted: false,
-      });
+      const result = await this.checkMember(member, role);
+
+      if (result !== 'awaiting') {
+        return;
+      }
+
+      if (await this.postJoinPrompt(member)) {
+        await this.recordPrompt(member);
+      } else {
+        this.handledMembers.delete(memberKey);
+      }
     } catch (error) {
+      this.handledMembers.delete(memberKey);
       this.logUnexpectedError(
         `Failed to prepare verification for Discord user ${member.id} in guild ${member.guild.id}`,
         error,
@@ -78,20 +98,33 @@ export class UserVerificationService {
     }
   }
 
+  /**
+   * On startup (or when added to a guild): make sure the verification panel
+   * exists and restore the role of registered members. Members are never
+   * messaged individually here, so restarts cannot cause message floods;
+   * unverified members use the panel in the verification channel.
+   */
   async handleExistingGuildMembers(guild: Guild): Promise<void> {
     if (!this.isConfiguredVerificationGuild(guild.id)) {
       return;
     }
 
     try {
+      await this.ensureVerificationPanel(guild);
+    } catch (error) {
+      this.logUnexpectedError(
+        `Failed to post the verification panel in Discord guild ${guild.id}`,
+        error,
+      );
+    }
+
+    try {
       const role = await this.resolveVerifiedRole(guild);
       const members = await guild.members.fetch();
-      const counts: Record<PreparationResult | 'failed', number> = {
+      const counts: Record<MemberCheckResult | 'failed', number> = {
         verified: 0,
         restored: 0,
-        prompted: 0,
-        alreadyPrompted: 0,
-        notSent: 0,
+        awaiting: 0,
         failed: 0,
       };
 
@@ -101,16 +134,11 @@ export class UserVerificationService {
         }
 
         try {
-          // On startup, members who were already sent a prompt are not
-          // prompted again; otherwise every restart would re-send it.
-          const result = await this.prepareMemberVerification(member, role, {
-            skipIfAlreadyPrompted: true,
-          });
-          counts[result] += 1;
+          counts[await this.checkMember(member, role)] += 1;
         } catch (error) {
           counts.failed += 1;
           this.logUnexpectedError(
-            `Failed to prepare verification for Discord user ${member.id}`,
+            `Failed to check verification for Discord user ${member.id}`,
             error,
           );
         }
@@ -118,9 +146,8 @@ export class UserVerificationService {
 
       this.logger.log(
         `Checked ${members.size} existing members in Discord guild ${guild.id}: ` +
-          `${counts.prompted} prompted, ${counts.alreadyPrompted} already prompted, ` +
-          `${counts.restored} roles restored, ${counts.verified} already verified, ` +
-          `${counts.notSent} not reachable, ${counts.failed} failed`,
+          `${counts.verified} already verified, ${counts.restored} roles restored, ` +
+          `${counts.awaiting} awaiting verification, ${counts.failed} failed`,
       );
     } catch (error) {
       this.logUnexpectedError(
@@ -130,67 +157,35 @@ export class UserVerificationService {
     }
   }
 
-  private async prepareMemberVerification(
+  /** Restores the role of registered members; never sends any message. */
+  private async checkMember(
     member: GuildMember,
     role: Role,
-    options: { skipIfAlreadyPrompted: boolean },
-  ): Promise<PreparationResult> {
+  ): Promise<MemberCheckResult> {
     if (member.roles.cache.has(role.id)) {
       return 'verified';
     }
 
-    const memberKey = `${member.guild.id}:${member.id}`;
-
-    if (this.handledMembers.has(memberKey)) {
-      return 'alreadyPrompted';
-    }
-
-    this.handledMembers.add(memberKey);
-
-    try {
-      const where = {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
         guildId_discordUserId: {
           guildId: member.guild.id,
           discordUserId: member.id,
         },
-      };
-      const existingUser = await this.prisma.user.findUnique({ where });
+      },
+    });
 
-      if (existingUser) {
-        await this.restoreMemberRole(member, role);
-        return 'restored';
-      }
-
-      if (
-        options.skipIfAlreadyPrompted &&
-        (await this.prisma.verificationPrompt.findUnique({
-          where,
-          select: { id: true },
-        }))
-      ) {
-        return 'alreadyPrompted';
-      }
-
-      const deliveredVia = await this.postVerificationPrompt(member);
-
-      if (!deliveredVia) {
-        // Nothing was sent, so allow a later attempt (e.g. after a restart).
-        this.handledMembers.delete(memberKey);
-        return 'notSent';
-      }
-
-      await this.recordPrompt(member, deliveredVia);
-      return 'prompted';
-    } catch (error) {
-      this.handledMembers.delete(memberKey);
-      throw error;
+    if (existingUser) {
+      await this.restoreMemberRole(member, role);
+      return 'restored';
     }
+
+    return 'awaiting';
   }
 
-  private async recordPrompt(
-    member: GuildMember,
-    deliveredVia: VerificationPromptDelivery,
-  ): Promise<void> {
+  private async recordPrompt(member: GuildMember): Promise<void> {
+    const deliveredVia = VerificationPromptDelivery.CHANNEL;
+
     try {
       await this.prisma.verificationPrompt.upsert({
         where: {
@@ -232,7 +227,9 @@ export class UserVerificationService {
     }
 
     try {
-      if (interaction.isButton()) {
+      if (interaction.isButton() && interaction.customId === PANEL_BUTTON_ID) {
+        await this.handlePanelButton(interaction);
+      } else if (interaction.isButton()) {
         const target = this.getButtonTarget(interaction);
 
         if (!target || target.userId !== interaction.user.id) {
@@ -266,7 +263,8 @@ export class UserVerificationService {
     interaction: VerificationInteraction,
   ): boolean {
     return interaction.isButton()
-      ? interaction.customId === START_BUTTON_ID ||
+      ? interaction.customId === PANEL_BUTTON_ID ||
+          interaction.customId === START_BUTTON_ID ||
           interaction.customId === LEGACY_START_BUTTON_ID ||
           interaction.customId.startsWith(`${START_BUTTON_ID}:`)
       : interaction.customId === DETAILS_MODAL_ID ||
@@ -332,70 +330,129 @@ export class UserVerificationService {
     });
   }
 
-  /** Returns how the prompt was delivered, or null if it could not be sent. */
-  private async postVerificationPrompt(
-    member: GuildMember,
-  ): Promise<VerificationPromptDelivery | null> {
-    try {
-      await member.send({
-        content: `Chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Tin nhắn và biểu mẫu này chỉ hiển thị cho bạn.`,
-        components: [this.createStartButtonRow(member.guild.id, member.id)],
-      });
-    } catch (error) {
-      if (
-        error instanceof DiscordAPIError &&
-        error.code === RESTJSONErrorCodes.CannotSendMessagesToThisUser
-      ) {
-        return (await this.postChannelVerificationPrompt(member))
-          ? VerificationPromptDelivery.CHANNEL
-          : null;
-      }
-
-      throw error;
+  /** The panel button opens the form for whoever clicks it. */
+  private async handlePanelButton(
+    interaction: ButtonInteraction,
+  ): Promise<void> {
+    if (
+      !interaction.inCachedGuild() ||
+      !this.isConfiguredVerificationGuild(interaction.guildId)
+    ) {
+      throw new BadRequestException(
+        'Nút này chỉ dùng được trong máy chủ đã cấu hình xác thực.',
+      );
     }
 
-    this.logger.log(
-      `Sent a private verification prompt to Discord user ${member.id} for guild ${member.guild.id}`,
+    const role = await this.resolveVerifiedRole(interaction.guild);
+
+    if (interaction.member.roles.cache.has(role.id)) {
+      await interaction.reply({
+        content: `Bạn đã được xác thực và có vai trò **${role.name}** rồi.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await interaction.showModal(
+      this.createDetailsModal({
+        guildId: interaction.guildId,
+        userId: interaction.user.id,
+      }),
     );
-    return VerificationPromptDelivery.DM;
   }
 
-  /**
-   * Fallback for members who do not accept direct messages from server
-   * members. The button stays bound to the mentioned user, and the modal is
-   * still private, so only the mention is visible to the channel.
-   */
-  private async postChannelVerificationPrompt(
-    member: GuildMember,
-  ): Promise<boolean> {
+  private async fetchVerificationChannel(guild: Guild) {
     const channelId = this.configService.get('VERIFICATION_CHANNEL_ID', {
       infer: true,
     });
 
     if (!channelId) {
       this.logger.warn(
-        `Discord user ${member.id} does not accept direct messages and VERIFICATION_CHANNEL_ID is not configured; no verification prompt was sent`,
+        'User verification prompts are disabled because VERIFICATION_CHANNEL_ID is not configured',
       );
-      return false;
+      return null;
     }
 
-    const channel = await member.guild.channels.fetch(channelId);
+    const channel = await guild.channels.fetch(channelId);
 
-    if (!channel?.isSendable()) {
+    if (!channel?.isTextBased() || !channel.isSendable()) {
       this.logger.error(
         `Verification channel ${channelId} is missing or is not sendable`,
       );
+      return null;
+    }
+
+    return channel;
+  }
+
+  /** Posts the persistent verification panel unless it is already there. */
+  private async ensureVerificationPanel(guild: Guild): Promise<void> {
+    const channel = await this.fetchVerificationChannel(guild);
+
+    if (!channel) {
+      return;
+    }
+
+    const botUserId = guild.client.user.id;
+    const recentMessages = await channel.messages.fetch({ limit: 100 });
+    const panelExists = recentMessages.some(
+      (message) =>
+        message.author.id === botUserId &&
+        message.components.some(
+          (row) =>
+            'components' in row &&
+            row.components.some(
+              (component) =>
+                'customId' in component &&
+                component.customId === PANEL_BUTTON_ID,
+            ),
+        ),
+    );
+
+    if (panelExists) {
+      return;
+    }
+
+    await channel.send({
+      content:
+        '**Xác thực thành viên**\n' +
+        'Bấm nút **Xác thực người dùng** bên dưới để khai báo tên tài khoản, số điện thoại và số căn cước công dân. ' +
+        'Biểu mẫu chỉ hiển thị riêng cho bạn. Sau khi xác thực thành công, bạn sẽ được cấp vai trò thành viên.',
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(PANEL_BUTTON_ID)
+            .setLabel('Xác thực người dùng')
+            .setStyle(ButtonStyle.Primary),
+        ),
+      ],
+      allowedMentions: { parse: [] },
+    });
+
+    this.logger.log(
+      `Posted the verification panel in channel ${channel.id} of guild ${guild.id}`,
+    );
+  }
+
+  /**
+   * Mentions a new member in the verification channel with a button bound to
+   * them. The form stays private; only the mention is visible to the channel.
+   */
+  private async postJoinPrompt(member: GuildMember): Promise<boolean> {
+    const channel = await this.fetchVerificationChannel(member.guild);
+
+    if (!channel) {
       return false;
     }
 
     await channel.send({
-      content: `<@${member.id}>, chào mừng bạn! Bot không gửi được tin nhắn riêng cho bạn, vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Biểu mẫu chỉ hiển thị riêng cho bạn.`,
+      content: `<@${member.id}>, chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Biểu mẫu chỉ hiển thị riêng cho bạn.`,
       components: [this.createStartButtonRow(member.guild.id, member.id)],
       allowedMentions: { users: [member.id] },
     });
 
     this.logger.log(
-      `Discord user ${member.id} does not accept direct messages; posted the verification prompt in channel ${channelId}`,
+      `Posted a verification prompt for Discord user ${member.id} in channel ${channel.id}`,
     );
     return true;
   }
