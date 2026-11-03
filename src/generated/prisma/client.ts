@@ -51,3 +51,9 @@ export type EmailVerification = Prisma.EmailVerificationModel
  * 
  */
 export type User = Prisma.UserModel
+/**
+ * Model VerificationPrompt
+ * Remembers that a member was already sent the verification button, so the
+ * startup scan of existing members does not send it again on every restart.
+ */
+export type VerificationPrompt = Prisma.VerificationPromptModel

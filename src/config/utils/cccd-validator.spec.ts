@@ -47,8 +47,16 @@ describe('CCCD validator', () => {
     expect(normalizeCccd('037 153 000 257')).toBe('037153000257');
   });
 
-  it.each(['', '03715300025', '0371530002570', '03715300025A', '003153000257'])(
-    'rejects malformed or unknown province codes: %s',
+  it('accepts an unlisted province code without a province name', () => {
+    expect(parseCccd('003153000257')).toMatchObject({
+      value: '003153000257',
+      provinceCode: '003',
+      province: null,
+    });
+  });
+
+  it.each(['', '03715300025', '0371530002570', '03715300025A'])(
+    'rejects malformed CCCD values: %s',
     (value) => {
       expect(isValidCccd(value)).toBe(false);
     },

@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import {
+  DiscordAPIError,
   MessageFlags,
   type ButtonInteraction,
   type Guild,
@@ -12,16 +13,24 @@ import { PrismaService } from '../database/prisma.service.js';
 import { UserVerificationService } from './user-verification.service.js';
 
 describe('UserVerificationService', () => {
-  function createService() {
+  function createService(
+    overrides: Partial<EnvironmentVariables> = {},
+    { alreadyPrompted = false } = {},
+  ) {
     const values: Partial<EnvironmentVariables> = {
       DISCORD_GUILD_ID: 'guild-id',
       VERIFICATION_CHANNEL_ID: '1566719152507330602',
       VERIFIED_ROLE_NAME: 'member',
+      ...overrides,
     };
     const configService = {
       get: vi.fn((key: keyof EnvironmentVariables) => values[key]),
     } as unknown as ConfigService<EnvironmentVariables, true>;
     const userUpsert = vi.fn();
+    const promptFindUnique = vi
+      .fn()
+      .mockResolvedValue(alreadyPrompted ? { id: 1 } : null);
+    const promptUpsert = vi.fn();
     const prisma = {
       user: {
         findUnique: vi.fn().mockResolvedValue(null),
@@ -30,14 +39,138 @@ describe('UserVerificationService', () => {
       emailVerification: {
         findUnique: vi.fn().mockResolvedValue(null),
       },
+      verificationPrompt: {
+        findUnique: promptFindUnique,
+        upsert: promptUpsert,
+      },
     } as unknown as PrismaService;
 
     return {
       service: new UserVerificationService(configService, prisma),
       prisma,
       userUpsert,
+      promptFindUnique,
+      promptUpsert,
     };
   }
+
+  function createUnverifiedMember(send = vi.fn(), fetchChannel = vi.fn()) {
+    const verifiedRole = { id: 'verified-role-id', name: 'member' };
+    const guild = {
+      id: 'guild-id',
+      name: 'Test Guild',
+      roles: {
+        fetch: vi
+          .fn()
+          .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
+      },
+      members: { fetch: vi.fn() },
+      channels: { fetch: fetchChannel },
+    };
+    const member = {
+      id: 'user-id',
+      user: { bot: false },
+      send,
+      roles: { cache: { has: vi.fn().mockReturnValue(false) } },
+      guild,
+    };
+    guild.members.fetch.mockResolvedValue(new Map([[member.id, member]]));
+
+    return { guild, member };
+  }
+
+  function dmClosedError() {
+    return new DiscordAPIError(
+      { code: 50007, message: 'Cannot send messages to this user' },
+      50007,
+      403,
+      'POST',
+      '/channels/dm-channel-id/messages',
+      { body: undefined, files: undefined },
+    );
+  }
+
+  it('does not re-send the prompt on startup to members already prompted', async () => {
+    const send = vi.fn();
+    const { service, promptUpsert } = createService(
+      {},
+      { alreadyPrompted: true },
+    );
+    const { guild } = createUnverifiedMember(send);
+
+    await service.handleExistingGuildMembers(guild as unknown as Guild);
+
+    expect(send).not.toHaveBeenCalled();
+    expect(promptUpsert).not.toHaveBeenCalled();
+  });
+
+  it('records a DM prompt sent during the startup scan', async () => {
+    const { service, promptUpsert } = createService();
+    const { guild } = createUnverifiedMember();
+
+    await service.handleExistingGuildMembers(guild as unknown as Guild);
+
+    expect(promptUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          guildId: 'guild-id',
+          discordUserId: 'user-id',
+          deliveredVia: 'DM',
+        },
+      }),
+    );
+  });
+
+  it('always welcomes a (re)joining member, even if prompted before', async () => {
+    const send = vi.fn();
+    const { service, promptFindUnique, promptUpsert } = createService(
+      {},
+      { alreadyPrompted: true },
+    );
+    const { member } = createUnverifiedMember(send);
+
+    await service.handleMemberJoin(member as unknown as GuildMember);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(promptFindUnique).not.toHaveBeenCalled();
+    expect(promptUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ deliveredVia: 'DM' }),
+      }),
+    );
+  });
+
+  it('records a channel prompt when DMs are closed', async () => {
+    const fetchChannel = vi
+      .fn()
+      .mockResolvedValue({ isSendable: () => true, send: vi.fn() });
+    const { service, promptUpsert } = createService();
+    const { member } = createUnverifiedMember(
+      vi.fn().mockRejectedValue(dmClosedError()),
+      fetchChannel,
+    );
+
+    await service.handleMemberJoin(member as unknown as GuildMember);
+
+    expect(promptUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ deliveredVia: 'CHANNEL' }),
+      }),
+    );
+  });
+
+  it('does not record a prompt that could not be delivered anywhere', async () => {
+    const { service, promptUpsert } = createService({
+      VERIFICATION_CHANNEL_ID: undefined,
+    });
+    const { member } = createUnverifiedMember(
+      vi.fn().mockRejectedValue(dmClosedError()),
+    );
+
+    await service.handleMemberJoin(member as unknown as GuildMember);
+
+    expect(promptUpsert).not.toHaveBeenCalled();
+  });
 
   it('sends the Vietnamese verification button privately to a new member', async () => {
     const send = vi.fn();
@@ -69,6 +202,76 @@ describe('UserVerificationService', () => {
     expect(message.components[0].components[0].data.custom_id).toBe(
       'user-verification:start:guild-id:user-id',
     );
+  });
+
+  it('posts a user-bound prompt in the verification channel when DMs are closed', async () => {
+    const dmClosed = new DiscordAPIError(
+      { code: 50007, message: 'Cannot send messages to this user' },
+      50007,
+      403,
+      'POST',
+      '/channels/dm-channel-id/messages',
+      { body: undefined, files: undefined },
+    );
+    const channelSend = vi.fn();
+    const fetchChannel = vi.fn().mockResolvedValue({
+      isSendable: () => true,
+      send: channelSend,
+    });
+    const { service } = createService();
+    const verifiedRole = { id: 'verified-role-id', name: 'member' };
+    const member = {
+      id: 'user-id',
+      user: { bot: false },
+      send: vi.fn().mockRejectedValue(dmClosed),
+      roles: { cache: { has: vi.fn().mockReturnValue(false) } },
+      guild: {
+        id: 'guild-id',
+        name: 'Test Guild',
+        roles: {
+          fetch: vi
+            .fn()
+            .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
+        },
+        channels: { fetch: fetchChannel },
+      },
+    } as unknown as GuildMember;
+
+    await service.handleMemberJoin(member);
+
+    expect(fetchChannel).toHaveBeenCalledWith('1566719152507330602');
+    const message = channelSend.mock.calls[0][0];
+    expect(message.content).toContain('<@user-id>');
+    expect(message.allowedMentions).toEqual({ users: ['user-id'] });
+    expect(message.components[0].components[0].data.custom_id).toBe(
+      'user-verification:start:guild-id:user-id',
+    );
+  });
+
+  it('does not post in a channel when DMs fail for another reason', async () => {
+    const fetchChannel = vi.fn();
+    const { service } = createService();
+    const verifiedRole = { id: 'verified-role-id', name: 'member' };
+    const member = {
+      id: 'user-id',
+      user: { bot: false },
+      send: vi.fn().mockRejectedValue(new Error('network down')),
+      roles: { cache: { has: vi.fn().mockReturnValue(false) } },
+      guild: {
+        id: 'guild-id',
+        name: 'Test Guild',
+        roles: {
+          fetch: vi
+            .fn()
+            .mockResolvedValue(new Map([[verifiedRole.id, verifiedRole]])),
+        },
+        channels: { fetch: fetchChannel },
+      },
+    } as unknown as GuildMember;
+
+    await service.handleMemberJoin(member);
+
+    expect(fetchChannel).not.toHaveBeenCalled();
   });
 
   it('prompts members who joined before the bot and lack the verified role', async () => {
@@ -274,7 +477,7 @@ describe('UserVerificationService', () => {
     });
   });
 
-  it('rejects a CCCD with an unknown province code privately', async () => {
+  it('rejects a structurally invalid CCCD privately', async () => {
     const { service } = createService();
     const reply = vi.fn();
     const interaction = {
@@ -284,7 +487,7 @@ describe('UserVerificationService', () => {
       inCachedGuild: () => true,
       fields: {
         getTextInputValue: (id: string) =>
-          id === 'phone' ? '0912345678' : '003153000257',
+          id === 'phone' ? '0912345678' : '03715300025A',
       },
       deferred: false,
       replied: false,

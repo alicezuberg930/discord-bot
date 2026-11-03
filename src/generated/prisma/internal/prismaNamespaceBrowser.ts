@@ -52,7 +52,8 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   EmailVerification: 'EmailVerification',
-  User: 'User'
+  User: 'User',
+  VerificationPrompt: 'VerificationPrompt'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -107,6 +108,17 @@ export const UserScalarFieldEnum = {
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
+
+
+export const VerificationPromptScalarFieldEnum = {
+  id: 'id',
+  guildId: 'guildId',
+  discordUserId: 'discordUserId',
+  deliveredVia: 'deliveredVia',
+  promptedAt: 'promptedAt'
+} as const
+
+export type VerificationPromptScalarFieldEnum = (typeof VerificationPromptScalarFieldEnum)[keyof typeof VerificationPromptScalarFieldEnum]
 
 
 export const SortOrder = {

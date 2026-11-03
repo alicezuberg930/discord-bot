@@ -398,7 +398,8 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   EmailVerification: 'EmailVerification',
-  User: 'User'
+  User: 'User',
+  VerificationPrompt: 'VerificationPrompt'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -414,7 +415,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "emailVerification" | "user"
+    modelProps: "emailVerification" | "user" | "verificationPrompt"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -566,6 +567,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    VerificationPrompt: {
+      payload: Prisma.$VerificationPromptPayload<ExtArgs>
+      fields: Prisma.VerificationPromptFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.VerificationPromptFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.VerificationPromptFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>
+        }
+        findFirst: {
+          args: Prisma.VerificationPromptFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.VerificationPromptFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>
+        }
+        findMany: {
+          args: Prisma.VerificationPromptFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>[]
+        }
+        create: {
+          args: Prisma.VerificationPromptCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>
+        }
+        createMany: {
+          args: Prisma.VerificationPromptCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.VerificationPromptCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>[]
+        }
+        delete: {
+          args: Prisma.VerificationPromptDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>
+        }
+        update: {
+          args: Prisma.VerificationPromptUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>
+        }
+        deleteMany: {
+          args: Prisma.VerificationPromptDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.VerificationPromptUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.VerificationPromptUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>[]
+        }
+        upsert: {
+          args: Prisma.VerificationPromptUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$VerificationPromptPayload>
+        }
+        aggregate: {
+          args: Prisma.VerificationPromptAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateVerificationPrompt>
+        }
+        groupBy: {
+          args: Prisma.VerificationPromptGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.VerificationPromptGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.VerificationPromptCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.VerificationPromptCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -641,6 +716,17 @@ export const UserScalarFieldEnum = {
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
+
+
+export const VerificationPromptScalarFieldEnum = {
+  id: 'id',
+  guildId: 'guildId',
+  discordUserId: 'discordUserId',
+  deliveredVia: 'deliveredVia',
+  promptedAt: 'promptedAt'
+} as const
+
+export type VerificationPromptScalarFieldEnum = (typeof VerificationPromptScalarFieldEnum)[keyof typeof VerificationPromptScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -726,6 +812,20 @@ export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'In
  * Reference to a field of type 'Int[]'
  */
 export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
+ * Reference to a field of type 'VerificationPromptDelivery'
+ */
+export type EnumVerificationPromptDeliveryFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'VerificationPromptDelivery'>
+    
+
+
+/**
+ * Reference to a field of type 'VerificationPromptDelivery[]'
+ */
+export type ListEnumVerificationPromptDeliveryFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'VerificationPromptDelivery[]'>
     
 
 
@@ -895,6 +995,7 @@ export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaC
 export type GlobalOmitConfig = {
   emailVerification?: Prisma.EmailVerificationOmit
   user?: Prisma.UserOmit
+  verificationPrompt?: Prisma.VerificationPromptOmit
 }
 
 /* Types for Logging */

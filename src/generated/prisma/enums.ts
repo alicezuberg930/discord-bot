@@ -18,3 +18,11 @@ export const EmailVerificationStatus = {
 } as const
 
 export type EmailVerificationStatus = (typeof EmailVerificationStatus)[keyof typeof EmailVerificationStatus]
+
+
+export const VerificationPromptDelivery = {
+  DM: 'DM',
+  CHANNEL: 'CHANNEL'
+} as const
+
+export type VerificationPromptDelivery = (typeof VerificationPromptDelivery)[keyof typeof VerificationPromptDelivery]
