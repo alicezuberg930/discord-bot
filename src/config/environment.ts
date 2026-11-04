@@ -11,6 +11,7 @@ export interface EnvironmentVariables {
   VERIFICATION_CHANNEL_ID?: string;
   VERIFIED_ROLE_ID?: string;
   VERIFIED_ROLE_NAME: string;
+  EXCLUDE_ROLES_VERIFICATION: string[];
 }
 
 const PLACEHOLDER_PREFIX = 'replace-with-';
@@ -46,6 +47,26 @@ function optionalConfiguredString(
   const value = optionalString(config, key);
 
   return value?.startsWith(PLACEHOLDER_PREFIX) ? undefined : value;
+}
+
+function commaSeparatedStrings(
+  config: Record<string, unknown>,
+  key: string,
+): string[] {
+  const value = optionalString(config, key);
+
+  if (!value) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function integerValue(
@@ -122,5 +143,9 @@ export function validateEnvironment(
     VERIFIED_ROLE_ID: optionalString(config, 'VERIFIED_ROLE_ID'),
     VERIFIED_ROLE_NAME:
       optionalString(config, 'VERIFIED_ROLE_NAME') ?? 'member',
+    EXCLUDE_ROLES_VERIFICATION: commaSeparatedStrings(
+      config,
+      'EXCLUDE_ROLES_VERIFICATION',
+    ),
   };
 }

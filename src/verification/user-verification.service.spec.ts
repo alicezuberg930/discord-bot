@@ -245,6 +245,7 @@ describe('UserVerificationService', () => {
     function createPanelClick(
       memberHasRole: boolean,
       customId: string = PANEL_BUTTON_ID,
+      additionalRoleIds: string[] = [],
     ) {
       const { guild, verifiedRole } = createGuild();
       const showModal = vi.fn();
@@ -261,7 +262,8 @@ describe('UserVerificationService', () => {
           roles: {
             cache: {
               has: (roleId: string) =>
-                memberHasRole && roleId === verifiedRole.id,
+                (memberHasRole && roleId === verifiedRole.id) ||
+                additionalRoleIds.includes(roleId),
             },
           },
         },
@@ -292,6 +294,25 @@ describe('UserVerificationService', () => {
       expect(showModal).not.toHaveBeenCalled();
       expect(reply).toHaveBeenCalledWith({
         content: 'Bạn đã được xác thực và có vai trò **member** rồi.',
+        flags: MessageFlags.Ephemeral,
+      });
+    });
+
+    it('exempts members who have a configured excluded role', async () => {
+      const { service } = createService({
+        EXCLUDE_ROLES_VERIFICATION: ['admin-role-id', 'moderator-role-id'],
+      });
+      const { interaction, showModal, reply } = createPanelClick(
+        false,
+        PANEL_BUTTON_ID,
+        ['admin-role-id'],
+      );
+
+      await service.handleInteraction(interaction);
+
+      expect(showModal).not.toHaveBeenCalled();
+      expect(reply).toHaveBeenCalledWith({
+        content: 'Bạn đã là quản trị, không cần xác thực',
         flags: MessageFlags.Ephemeral,
       });
     });

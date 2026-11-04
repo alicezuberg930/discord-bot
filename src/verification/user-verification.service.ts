@@ -326,6 +326,22 @@ export class UserVerificationService {
       );
     }
 
+    const excludedRoleIds =
+      this.configService.get('EXCLUDE_ROLES_VERIFICATION', { infer: true }) ??
+      [];
+
+    if (
+      excludedRoleIds.some((roleId) =>
+        interaction.member.roles.cache.has(roleId),
+      )
+    ) {
+      await interaction.reply({
+        content: 'Bạn đã là quản trị, không cần xác thực',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const role = await this.resolveVerifiedRole(interaction.guild);
 
     if (interaction.member.roles.cache.has(role.id)) {
