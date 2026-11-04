@@ -187,6 +187,23 @@ npm run start:prod
 | `VERIFICATION_CHANNEL_ID` | For user verification | Channel that holds the verification panel and new-member prompts. |
 | `VERIFIED_ROLE_ID` | Recommended | Exact role to assign after successful verification. |
 | `VERIFIED_ROLE_NAME` | No | Role name fallback; defaults to `member`. |
+| `EXPORT_USERNAME` | For `/export-excel` | Login name for the users export. Leave empty (with `EXPORT_PASSWORD`) to disable the endpoint. |
+| `EXPORT_PASSWORD` | For `/export-excel` | Login password, at least 12 characters. |
+
+## Users export (Excel)
+
+`GET /export-excel` downloads every `users` record (account name, phone, CCCD,
+Discord IDs, email) as `users-export.xlsx`. Because this is sensitive personal
+data, the endpoint is protected with HTTP Basic authentication:
+
+- Set `EXPORT_USERNAME` and `EXPORT_PASSWORD` in `.env` and restart the app.
+  When they are not set, the endpoint returns `404`.
+- Opening the URL in a browser shows a login dialog; only the correct login
+  downloads the file. Successful downloads and failed logins are logged with
+  the client IP.
+- After 10 failed logins within 15 minutes, that client IP is blocked (`429`)
+  until the window expires.
+- Only use it over HTTPS, so the login is not sent in clear text.
 
 `.env` is ignored by Git. Keep both API credentials private. If the Discord token
 is exposed, reset it in the Discord Developer Portal; if the Gemini key is

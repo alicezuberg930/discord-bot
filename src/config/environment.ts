@@ -11,6 +11,40 @@ export interface EnvironmentVariables {
   VERIFICATION_CHANNEL_ID?: string;
   VERIFIED_ROLE_ID?: string;
   VERIFIED_ROLE_NAME: string;
+  /** Login for GET /export-excel; the endpoint is disabled when unset. */
+  EXPORT_USERNAME?: string;
+  EXPORT_PASSWORD?: string;
+}
+
+const MIN_EXPORT_PASSWORD_LENGTH = 12;
+
+function exportCredentials(
+  config: Record<string, unknown>,
+): Pick<EnvironmentVariables, 'EXPORT_USERNAME' | 'EXPORT_PASSWORD'> {
+  const username = optionalConfiguredString(config, 'EXPORT_USERNAME');
+  const password = optionalConfiguredString(config, 'EXPORT_PASSWORD');
+
+  if (!username && !password) {
+    return { EXPORT_USERNAME: undefined, EXPORT_PASSWORD: undefined };
+  }
+
+  if (!username || !password) {
+    throw new Error(
+      'EXPORT_USERNAME and EXPORT_PASSWORD must be set together (or both left empty to disable /export-excel)',
+    );
+  }
+
+  if (username.includes(':')) {
+    throw new Error('EXPORT_USERNAME must not contain ":"');
+  }
+
+  if (password.length < MIN_EXPORT_PASSWORD_LENGTH) {
+    throw new Error(
+      `EXPORT_PASSWORD must be at least ${MIN_EXPORT_PASSWORD_LENGTH} characters long`,
+    );
+  }
+
+  return { EXPORT_USERNAME: username, EXPORT_PASSWORD: password };
 }
 
 const PLACEHOLDER_PREFIX = 'replace-with-';
@@ -122,5 +156,6 @@ export function validateEnvironment(
     VERIFIED_ROLE_ID: optionalString(config, 'VERIFIED_ROLE_ID'),
     VERIFIED_ROLE_NAME:
       optionalString(config, 'VERIFIED_ROLE_NAME') ?? 'member',
+    ...exportCredentials(config),
   };
 }

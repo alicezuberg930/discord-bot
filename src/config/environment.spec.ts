@@ -58,3 +58,41 @@ describe('validateEnvironment', () => {
     ).toBeUndefined();
   });
 });
+
+describe('export login settings', () => {
+  const base = { DATABASE_ENABLED: 'false', DISCORD_ENABLED: 'false' };
+
+  it('disables the export when no login is configured', () => {
+    expect(validateEnvironment(base)).toMatchObject({
+      EXPORT_USERNAME: undefined,
+      EXPORT_PASSWORD: undefined,
+    });
+  });
+
+  it('accepts a username with a password of at least 12 characters', () => {
+    expect(
+      validateEnvironment({
+        ...base,
+        EXPORT_USERNAME: 'admin',
+        EXPORT_PASSWORD: 'a-long-password',
+      }),
+    ).toMatchObject({
+      EXPORT_USERNAME: 'admin',
+      EXPORT_PASSWORD: 'a-long-password',
+    });
+  });
+
+  it.each([
+    [{ EXPORT_USERNAME: 'admin' }, /must be set together/],
+    [{ EXPORT_PASSWORD: 'a-long-password' }, /must be set together/],
+    [{ EXPORT_USERNAME: 'admin', EXPORT_PASSWORD: 'short' }, /at least 12/],
+    [
+      { EXPORT_USERNAME: 'ad:min', EXPORT_PASSWORD: 'a-long-password' },
+      /must not contain/,
+    ],
+  ])('rejects an invalid export login %o', (settings, message) => {
+    expect(() => validateEnvironment({ ...base, ...settings })).toThrow(
+      message,
+    );
+  });
+});
