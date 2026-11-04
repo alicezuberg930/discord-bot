@@ -16,9 +16,11 @@ import {
   Routes,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type Guild,
 } from 'discord.js';
 import type { EnvironmentVariables } from '../config/environment.js';
 import { GeminiService } from '../gemini/gemini.service.js';
+import { LiveUpdatesService } from '../live/live-updates.service.js';
 import { UserVerificationService } from '../verification/user-verification.service.js';
 import { splitDiscordMarkdown } from './discord-markdown.js';
 
@@ -52,6 +54,7 @@ export class DiscordService
     private readonly configService: ConfigService<EnvironmentVariables, true>,
     private readonly geminiService: GeminiService,
     private readonly userVerificationService: UserVerificationService,
+    private readonly liveUpdatesService: LiveUpdatesService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -81,7 +84,17 @@ export class DiscordService
     });
 
     this.client.on(Events.GuildMemberAdd, async (member) => {
+      this.liveUpdatesService.notify('member-joined');
       await this.userVerificationService.handleMemberJoin(member);
+    });
+
+    // Keep the admin page live: joins, leaves and role/nickname changes.
+    this.client.on(Events.GuildMemberRemove, () => {
+      this.liveUpdatesService.notify('member-left');
+    });
+
+    this.client.on(Events.GuildMemberUpdate, () => {
+      this.liveUpdatesService.notify('member-updated');
     });
 
     this.client.on(Events.GuildCreate, async (guild) => {
@@ -94,6 +107,9 @@ export class DiscordService
           await this.userVerificationService.handleInteraction(interaction);
 
         if (handled) {
+          if (interaction.isModalSubmit()) {
+            this.liveUpdatesService.notify('verification-submitted');
+          }
           return;
         }
       }
@@ -142,6 +158,31 @@ export class DiscordService
       guildCount: this.client.guilds.cache.size,
       uptimeMs: this.client.uptime,
     };
+  }
+
+  /** The connected guild with its member list, or null while offline. */
+  async getGuild(guildId: string): Promise<Guild | null> {
+    if (!this.client.isReady()) {
+      return null;
+    }
+
+    const guild = await this.client.guilds.fetch(guildId).catch(() => null);
+
+    if (!guild) {
+      return null;
+    }
+
+    // The GuildMembers intent keeps the cache up to date after the startup
+    // scan; only ask Discord again if the cache is clearly incomplete.
+    if (guild.members.cache.size < guild.memberCount) {
+      await guild.members.fetch().catch((error: unknown) => {
+        this.logger.warn(
+          `Could not refresh members of guild ${guildId}; using the cache: ${String(error)}`,
+        );
+      });
+    }
+
+    return guild;
   }
 
   async onApplicationShutdown(): Promise<void> {

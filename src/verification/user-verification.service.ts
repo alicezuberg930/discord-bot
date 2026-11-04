@@ -162,7 +162,7 @@ export class UserVerificationService {
     member: GuildMember,
     role: Role,
   ): Promise<MemberCheckResult> {
-    if (member.roles.cache.has(role.id)) {
+    if (this.hasVerifiedRole(member, role)) {
       return 'verified';
     }
 
@@ -336,19 +336,33 @@ export class UserVerificationService {
       select: { id: true },
     });
 
+    const role = await this.resolveVerifiedRole(interaction.guild);
+    const hasRole = this.hasVerifiedRole(interaction.member, role);
+
     if (existingUser) {
+      // A registered member who lost the role (left and rejoined, or it was
+      // removed) gets it back right away instead of waiting for a restart.
+      if (!hasRole) {
+        await this.restoreMemberRole(interaction.member, role);
+        this.logger.log(
+          `Restored verified role for registered member ${interaction.user.id} after a button click`,
+        );
+      }
+
       await interaction.reply({
-        content: 'Bạn đã xác thực rồi, không cần xác thực lại',
+        content: hasRole
+          ? 'Bạn đã xác thực rồi, không cần xác thực lại'
+          : `Bạn đã xác thực rồi. Đã cấp lại vai trò **${role.name}** cho bạn.`,
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    const role = await this.resolveVerifiedRole(interaction.guild);
-
-    if (interaction.member.roles.cache.has(role.id)) {
+    if (hasRole) {
       await interaction.reply({
-        content: `Bạn đã được xác thực và có vai trò **${role.name}** rồi.`,
+        content: interaction.member.roles.cache.has(role.id)
+          ? `Bạn đã được xác thực và có vai trò **${role.name}** rồi.`
+          : 'Bạn đã xác thực rồi, không cần xác thực lại',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -534,12 +548,39 @@ export class UserVerificationService {
       },
     });
 
-    if (!member.roles.cache.has(role.id)) {
-      await member.roles.add(role, 'User information submitted');
+    if (this.hasVerifiedRole(member, role)) {
+      // e.g. a promoted member submitting an old form: keep their roles as is.
+      await interaction.editReply('Xác thực thành công.');
+      return;
     }
 
+    await member.roles.add(role, 'User information submitted');
     await interaction.editReply(
       `Xác thực thành công. Bạn đã được cấp vai trò **${role.name}**.`,
+    );
+  }
+
+  /** Role IDs that count as verified: the assigned role plus promoted ranks. */
+  async getVerifiedRoleIds(guild: Guild): Promise<string[]> {
+    const role = await this.resolveVerifiedRole(guild);
+    const extraRoleIds = this.configService.get('EXTRA_VERIFIED_ROLE_IDS', {
+      infer: true,
+    });
+
+    return [role.id, ...(extraRoleIds ?? [])];
+  }
+
+  /**
+   * The assigned verified role, or any EXTRA_VERIFIED_ROLE_IDS role (such as
+   * a promoted rank that replaces it), marks a member as verified.
+   */
+  private hasVerifiedRole(member: GuildMember, role: Role): boolean {
+    const extraRoleIds = this.configService.get('EXTRA_VERIFIED_ROLE_IDS', {
+      infer: true,
+    });
+
+    return [role.id, ...(extraRoleIds ?? [])].some((roleId) =>
+      member.roles.cache.has(roleId),
     );
   }
 

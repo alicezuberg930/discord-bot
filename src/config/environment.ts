@@ -11,6 +11,11 @@ export interface EnvironmentVariables {
   VERIFICATION_CHANNEL_ID?: string;
   VERIFIED_ROLE_ID?: string;
   VERIFIED_ROLE_NAME: string;
+  /**
+   * Other roles (e.g. promoted ranks) whose holders also count as verified.
+   * The bot never assigns them; it only stops asking those members to verify.
+   */
+  EXTRA_VERIFIED_ROLE_IDS: string[];
   /** Login for GET /export-excel; the endpoint is disabled when unset. */
   EXPORT_USERNAME?: string;
   EXPORT_PASSWORD?: string;
@@ -45,6 +50,23 @@ function exportCredentials(
   }
 
   return { EXPORT_USERNAME: username, EXPORT_PASSWORD: password };
+}
+
+function roleIdList(config: Record<string, unknown>, key: string): string[] {
+  const ids = (optionalString(config, key) ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+
+  for (const id of ids) {
+    if (!/^\d{17,20}$/.test(id)) {
+      throw new Error(
+        `${key} must be a comma-separated list of Discord role IDs (got "${id}")`,
+      );
+    }
+  }
+
+  return [...new Set(ids)];
 }
 
 const PLACEHOLDER_PREFIX = 'replace-with-';
@@ -156,6 +178,7 @@ export function validateEnvironment(
     VERIFIED_ROLE_ID: optionalString(config, 'VERIFIED_ROLE_ID'),
     VERIFIED_ROLE_NAME:
       optionalString(config, 'VERIFIED_ROLE_NAME') ?? 'member',
+    EXTRA_VERIFIED_ROLE_IDS: roleIdList(config, 'EXTRA_VERIFIED_ROLE_IDS'),
     ...exportCredentials(config),
   };
 }

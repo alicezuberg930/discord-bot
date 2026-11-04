@@ -23,7 +23,29 @@ describe('validateEnvironment', () => {
       VERIFICATION_CHANNEL_ID: undefined,
       VERIFIED_ROLE_ID: undefined,
       VERIFIED_ROLE_NAME: 'member',
+      EXTRA_VERIFIED_ROLE_IDS: [],
     });
+  });
+
+  it('parses extra verified role IDs from a comma-separated list', () => {
+    expect(
+      validateEnvironment({
+        DATABASE_ENABLED: 'false',
+        DISCORD_ENABLED: 'false',
+        EXTRA_VERIFIED_ROLE_IDS:
+          ' 1566835254638153950, 1566835254638153951,,1566835254638153950 ',
+      }).EXTRA_VERIFIED_ROLE_IDS,
+    ).toEqual(['1566835254638153950', '1566835254638153951']);
+  });
+
+  it('rejects an extra verified role that is not a role ID', () => {
+    expect(() =>
+      validateEnvironment({
+        DATABASE_ENABLED: 'false',
+        DISCORD_ENABLED: 'false',
+        EXTRA_VERIFIED_ROLE_IDS: 'đạo hữu',
+      }),
+    ).toThrow('EXTRA_VERIFIED_ROLE_IDS must be a comma-separated list');
   });
 
   it('does not require Discord credentials when the bot is disabled', () => {
