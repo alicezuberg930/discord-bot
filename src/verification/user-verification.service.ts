@@ -326,17 +326,19 @@ export class UserVerificationService {
       );
     }
 
-    const excludedRoleIds =
-      this.configService.get('EXCLUDE_ROLES_VERIFICATION', { infer: true }) ??
-      [];
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        guildId_discordUserId: {
+          guildId: interaction.guildId,
+          discordUserId: interaction.user.id,
+        },
+      },
+      select: { id: true },
+    });
 
-    if (
-      excludedRoleIds.some((roleId) =>
-        interaction.member.roles.cache.has(roleId),
-      )
-    ) {
+    if (existingUser) {
       await interaction.reply({
-        content: 'Bạn đã là quản trị, không cần xác thực',
+        content: 'Bạn đã xác thực rồi, không cần xác thực lại',
         flags: MessageFlags.Ephemeral,
       });
       return;

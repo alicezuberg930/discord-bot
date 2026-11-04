@@ -74,13 +74,9 @@ their role restored automatically.
    VERIFICATION_CHANNEL_ID=1566719152507330602
    VERIFIED_ROLE_ID=
    VERIFIED_ROLE_NAME=member
-   EXCLUDE_ROLES_VERIFICATION=123456789012345678,234567890123456789
    ```
 
    `VERIFIED_ROLE_ID` is recommended if multiple roles could have the same name.
-   Members with any role listed in `EXCLUDE_ROLES_VERIFICATION` are told they
-   are administrators and do not need to verify when they click the button.
-
 4. Let members **without** the verified role see the verification channel, and
    give the bot **View Channel**, **Send Messages**, and **Read Message
    History** there.
@@ -191,7 +187,6 @@ npm run start:prod
 | `VERIFICATION_CHANNEL_ID` | For user verification | Channel that holds the verification panel and new-member prompts. |
 | `VERIFIED_ROLE_ID` | Recommended | Exact role to assign after successful verification. |
 | `VERIFIED_ROLE_NAME` | No | Role name fallback; defaults to `member`. |
-| `EXCLUDE_ROLES_VERIFICATION` | No | Comma-separated role IDs that are exempt when clicking the verification button. |
 
 `.env` is ignored by Git. Keep both API credentials private. If the Discord token
 is exposed, reset it in the Discord Developer Portal; if the Gemini key is

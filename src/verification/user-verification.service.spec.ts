@@ -29,12 +29,13 @@ describe('UserVerificationService', () => {
       get: vi.fn((key: keyof EnvironmentVariables) => values[key]),
     } as unknown as ConfigService<EnvironmentVariables, true>;
     const userUpsert = vi.fn();
+    const userFindUnique = vi
+      .fn()
+      .mockResolvedValue(registered ? { id: 1, accountName: 'A' } : null);
     const promptUpsert = vi.fn();
     const prisma = {
       user: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValue(registered ? { id: 1, accountName: 'A' } : null),
+        findUnique: userFindUnique,
         upsert: userUpsert,
       },
       emailVerification: {
@@ -47,6 +48,7 @@ describe('UserVerificationService', () => {
 
     return {
       service: new UserVerificationService(configService, prisma),
+      userFindUnique,
       userUpsert,
       promptUpsert,
     };
@@ -245,7 +247,6 @@ describe('UserVerificationService', () => {
     function createPanelClick(
       memberHasRole: boolean,
       customId: string = PANEL_BUTTON_ID,
-      additionalRoleIds: string[] = [],
     ) {
       const { guild, verifiedRole } = createGuild();
       const showModal = vi.fn();
@@ -262,8 +263,7 @@ describe('UserVerificationService', () => {
           roles: {
             cache: {
               has: (roleId: string) =>
-                (memberHasRole && roleId === verifiedRole.id) ||
-                additionalRoleIds.includes(roleId),
+                memberHasRole && roleId === verifiedRole.id,
             },
           },
         },
@@ -298,21 +298,27 @@ describe('UserVerificationService', () => {
       });
     });
 
-    it('exempts members who have a configured excluded role', async () => {
-      const { service } = createService({
-        EXCLUDE_ROLES_VERIFICATION: ['admin-role-id', 'moderator-role-id'],
-      });
-      const { interaction, showModal, reply } = createPanelClick(
-        false,
-        PANEL_BUTTON_ID,
-        ['admin-role-id'],
+    it('does not reopen the form for a user already stored in the database', async () => {
+      const { service, userFindUnique } = createService(
+        {},
+        { registered: true },
       );
+      const { interaction, showModal, reply } = createPanelClick(false);
 
       await service.handleInteraction(interaction);
 
       expect(showModal).not.toHaveBeenCalled();
+      expect(userFindUnique).toHaveBeenCalledWith({
+        where: {
+          guildId_discordUserId: {
+            guildId: 'guild-id',
+            discordUserId: 'clicking-user-id',
+          },
+        },
+        select: { id: true },
+      });
       expect(reply).toHaveBeenCalledWith({
-        content: 'Bạn đã là quản trị, không cần xác thực',
+        content: 'Bạn đã xác thực rồi, không cần xác thực lại',
         flags: MessageFlags.Ephemeral,
       });
     });

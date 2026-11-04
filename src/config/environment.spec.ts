@@ -23,19 +23,7 @@ describe('validateEnvironment', () => {
       VERIFICATION_CHANNEL_ID: undefined,
       VERIFIED_ROLE_ID: undefined,
       VERIFIED_ROLE_NAME: 'member',
-      EXCLUDE_ROLES_VERIFICATION: [],
     });
-  });
-
-  it('parses excluded verification role IDs from a comma-separated value', () => {
-    expect(
-      validateEnvironment({
-        DATABASE_ENABLED: 'false',
-        DISCORD_ENABLED: 'false',
-        EXCLUDE_ROLES_VERIFICATION:
-          ' admin-role-id, moderator-role-id, admin-role-id ',
-      }).EXCLUDE_ROLES_VERIFICATION,
-    ).toEqual(['admin-role-id', 'moderator-role-id']);
   });
 
   it('does not require Discord credentials when the bot is disabled', () => {
