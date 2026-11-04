@@ -57,6 +57,7 @@ describe('UserVerificationService', () => {
   /** A guild with one human member and a sendable verification channel. */
   function createGuild({
     memberHasRole = false,
+    otherRoleIds = [] as string[],
     recentMessages = [] as unknown[],
   } = {}) {
     const verifiedRole = {
@@ -101,7 +102,9 @@ describe('UserVerificationService', () => {
       roles: {
         cache: {
           has: vi.fn(
-            (roleId: string) => memberHasRole && roleId === verifiedRole.id,
+            (roleId: string) =>
+              (memberHasRole && roleId === verifiedRole.id) ||
+              otherRoleIds.includes(roleId),
           ),
         },
         add: addRole,
@@ -247,10 +250,12 @@ describe('UserVerificationService', () => {
     function createPanelClick(
       memberHasRole: boolean,
       customId: string = PANEL_BUTTON_ID,
+      otherRoleIds: string[] = [],
     ) {
       const { guild, verifiedRole } = createGuild();
       const showModal = vi.fn();
       const reply = vi.fn();
+      const addRole = vi.fn();
       const interaction = {
         customId,
         isButton: () => true,
@@ -260,17 +265,20 @@ describe('UserVerificationService', () => {
         guildId: 'guild-id',
         guild,
         member: {
+          guild,
           roles: {
             cache: {
               has: (roleId: string) =>
-                memberHasRole && roleId === verifiedRole.id,
+                (memberHasRole && roleId === verifiedRole.id) ||
+                otherRoleIds.includes(roleId),
             },
+            add: addRole,
           },
         },
         user: { id: 'clicking-user-id' },
       } as unknown as ButtonInteraction;
 
-      return { interaction, showModal, reply };
+      return { interaction, showModal, reply, addRole, verifiedRole };
     }
 
     it('opens a form bound to whoever clicks the shared panel button', async () => {
@@ -298,16 +306,21 @@ describe('UserVerificationService', () => {
       });
     });
 
-    it('does not reopen the form for a user already stored in the database', async () => {
+    it('gives the role back to a registered member who lost it, without reopening the form', async () => {
       const { service, userFindUnique } = createService(
         {},
         { registered: true },
       );
-      const { interaction, showModal, reply } = createPanelClick(false);
+      const { interaction, showModal, reply, addRole, verifiedRole } =
+        createPanelClick(false);
 
       await service.handleInteraction(interaction);
 
       expect(showModal).not.toHaveBeenCalled();
+      expect(addRole).toHaveBeenCalledWith(
+        verifiedRole,
+        'Restored registered member role',
+      );
       expect(userFindUnique).toHaveBeenCalledWith({
         where: {
           guildId_discordUserId: {
@@ -318,10 +331,48 @@ describe('UserVerificationService', () => {
         select: { id: true },
       });
       expect(reply).toHaveBeenCalledWith({
+        content: 'Bạn đã xác thực rồi. Đã cấp lại vai trò **member** cho bạn.',
+        flags: MessageFlags.Ephemeral,
+      });
+    });
+
+    it('only reminds a registered member who still has the role', async () => {
+      const { service } = createService({}, { registered: true });
+      const { interaction, showModal, reply, addRole } = createPanelClick(true);
+
+      await service.handleInteraction(interaction);
+
+      expect(showModal).not.toHaveBeenCalled();
+      expect(addRole).not.toHaveBeenCalled();
+      expect(reply).toHaveBeenCalledWith({
         content: 'Bạn đã xác thực rồi, không cần xác thực lại',
         flags: MessageFlags.Ephemeral,
       });
     });
+
+    it.each([false, true])(
+      'tells a member promoted to an EXTRA_VERIFIED_ROLE_IDS role that they are verified (registered: %s)',
+      async (registered) => {
+        const { service } = createService(
+          { EXTRA_VERIFIED_ROLE_IDS: ['promoted-role-id'] },
+          { registered },
+        );
+        const { interaction, showModal, reply, addRole } = createPanelClick(
+          false,
+          PANEL_BUTTON_ID,
+          ['promoted-role-id'],
+        );
+
+        await service.handleInteraction(interaction);
+
+        expect(showModal).not.toHaveBeenCalled();
+        expect(addRole).not.toHaveBeenCalled();
+        expect(reply).toHaveBeenCalledWith({
+          content: 'Bạn đã xác thực rồi, không cần xác thực lại',
+          flags: MessageFlags.Ephemeral,
+        });
+      },
+    );
 
     it.each([
       'user-verification:start:guild-id:another-user-id',
@@ -345,6 +396,47 @@ describe('UserVerificationService', () => {
         );
       },
     );
+  });
+
+  describe('promoted members (EXTRA_VERIFIED_ROLE_IDS)', () => {
+    const PROMOTED_ROLE_ID = 'promoted-role-id';
+    const promotedConfig = { EXTRA_VERIFIED_ROLE_IDS: [PROMOTED_ROLE_ID] };
+
+    it('does not give the base role back to a registered member who was promoted', async () => {
+      const { service } = createService(promotedConfig, { registered: true });
+      const { guild, addRole } = createGuild({
+        otherRoleIds: [PROMOTED_ROLE_ID],
+      });
+
+      await service.handleExistingGuildMembers(guild as unknown as Guild);
+
+      expect(addRole).not.toHaveBeenCalled();
+    });
+
+    it('does not prompt a promoted member who joins again', async () => {
+      const { service, promptUpsert } = createService(promotedConfig);
+      const { member, channelSend, addRole } = createGuild({
+        otherRoleIds: [PROMOTED_ROLE_ID],
+      });
+
+      await service.handleMemberJoin(member as unknown as GuildMember);
+
+      expect(channelSend).not.toHaveBeenCalled();
+      expect(promptUpsert).not.toHaveBeenCalled();
+      expect(addRole).not.toHaveBeenCalled();
+    });
+
+    it('still asks members with no verified or promoted role to verify', async () => {
+      const { service, promptUpsert } = createService(promotedConfig);
+      const { member, channelSend } = createGuild({
+        otherRoleIds: ['unrelated-role-id'],
+      });
+
+      await service.handleMemberJoin(member as unknown as GuildMember);
+
+      expect(channelSend).toHaveBeenCalledTimes(1);
+      expect(promptUpsert).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('shows account name, phone, and CCCD fields in the modal (DM button)', async () => {
