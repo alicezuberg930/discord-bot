@@ -77,6 +77,12 @@ their role restored automatically.
    ```
 
    `VERIFIED_ROLE_ID` is recommended if multiple roles could have the same name.
+
+   If members are later promoted to another role that replaces the verified
+   role, list those role IDs in `EXTRA_VERIFIED_ROLE_IDS` (comma-separated).
+   Members holding any of them count as verified: they are not prompted, the
+   button only tells them they are verified, and the bot does not give the
+   original verified role back to them.
 4. Let members **without** the verified role see the verification channel, and
    give the bot **View Channel**, **Send Messages**, and **Read Message
    History** there.
@@ -187,23 +193,70 @@ npm run start:prod
 | `VERIFICATION_CHANNEL_ID` | For user verification | Channel that holds the verification panel and new-member prompts. |
 | `VERIFIED_ROLE_ID` | Recommended | Exact role to assign after successful verification. |
 | `VERIFIED_ROLE_NAME` | No | Role name fallback; defaults to `member`. |
-| `EXPORT_USERNAME` | For `/export-excel` | Login name for the users export. Leave empty (with `EXPORT_PASSWORD`) to disable the endpoint. |
+| `EXTRA_VERIFIED_ROLE_IDS` | No | Comma-separated role IDs (e.g. promoted ranks) that also count as verified. |
+| `EXPORT_USERNAME` | For `/export-excel` | Login name for the member page and Excel export. Leave empty (with `EXPORT_PASSWORD`) to disable the endpoint. |
 | `EXPORT_PASSWORD` | For `/export-excel` | Login password, at least 12 characters. |
 
-## Users export (Excel)
+## Member page and Excel export
 
-`GET /export-excel` downloads every `users` record (account name, phone, CCCD,
-Discord IDs, email) as `users-export.xlsx`. Because this is sensitive personal
-data, the endpoint is protected with HTTP Basic authentication:
+`/export-excel` is the admin page (Vietnamese UI). It is a small React app in
+[`web/`](web/) built with [shadcn/ui](https://ui.shadcn.com) components and
+Tailwind CSS; `npm run build` compiles it into `dist/web`, which Nest serves.
+Text uses SF Pro where the system provides it (macOS/iOS or a local install)
+and the bundled Inter font elsewhere, because SF Pro may not be redistributed.
+
+After logging in it shows every Discord member (bots excluded), newest first:
+
+- status: **Đã xác thực** (verified role or an `EXTRA_VERIFIED_ROLE_IDS`
+  rank), **Thiếu vai trò** (submitted the form but has no role; pressing the
+  button gives it back), or **Chưa xác thực**;
+- **Mới / Cũ** (joined within the last 24 hours, re-evaluated every second), roles, join time and the
+  account name from the form;
+- summary cards that double as filters, tabs, search (diacritics-insensitive),
+  pagination, and a paginated activity log of joins and form submissions with
+  each member's current status.
+
+The page is **live**: it keeps a Server-Sent Events connection to
+`GET /export-excel/api/events`. When someone joins, leaves, gets or loses a
+role, or submits the verification form, the bot sends a `change` event and the
+page reloads its data at once, highlights the affected rows and shows a toast.
+The header shows **Trực tiếp** while connected. If a proxy buffers the stream
+(no `ready` event within 8 seconds) the page falls back to reloading every 10
+seconds and shows that instead.
+
+Behind IIS + ARR, response buffering must be off for the stream to arrive in
+real time (server-wide ARR setting):
+
+```powershell
+Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter 'system.webServer/proxy' -name 'responseBufferLimit' -value 0
+```
+
+The **Tải Excel** button downloads `GET /export-excel/download`
+(`users-export.xlsx`): sheet `users` holds every verification record
+(account name, phone, CCCD, Discord IDs, email) and sheet `thanh_vien` lists
+the members as shown on the page. The page itself never shows phone numbers or
+CCCDs.
+
+### Login
 
 - Set `EXPORT_USERNAME` and `EXPORT_PASSWORD` in `.env` and restart the app.
-  When they are not set, the endpoint returns `404`.
-- Opening the URL in a browser shows a login dialog; only the correct login
-  downloads the file. Successful downloads and failed logins are logged with
-  the client IP.
+  When they are not set, every `/export-excel` route returns `404`.
+- The login form posts to `POST /export-excel/api/login`; a correct login sets
+  an `HttpOnly`, `Secure`, `SameSite=Strict` session cookie scoped to
+  `/export-excel`, valid for 12 hours. Sessions are signed with a key that only
+  lives in the running process, so a restart or deploy logs everyone out.
+- The member data (`GET /export-excel/api/overview`) and the download require
+  that session. Successful logins, failed attempts and downloads are logged
+  with the client IP.
 - After 10 failed logins within 15 minutes, that client IP is blocked (`429`)
   until the window expires.
-- Only use it over HTTPS, so the login is not sent in clear text.
+- Only use it over HTTPS.
+
+### Developing the page
+
+Run the API (`npm run start:dev`) and, in a second terminal, `npm run dev:web`.
+Vite serves the page at `http://localhost:5173/export-excel/` and proxies the
+API to port 3000. UI components live in `web/src/components/ui` (shadcn/ui).
 
 `.env` is ignored by Git. Keep both API credentials private. If the Discord token
 is exposed, reset it in the Discord Developer Portal; if the Gemini key is
