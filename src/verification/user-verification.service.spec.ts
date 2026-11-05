@@ -125,7 +125,7 @@ describe('UserVerificationService', () => {
   }
 
   describe('new members', () => {
-    it('mentions a new member in the verification channel with the shared button and never DMs', async () => {
+    it('mentions a new member with a user-bound button and never DMs', async () => {
       const { service, promptUpsert } = createService();
       const { member, channelSend, fetchChannel, directMessage } =
         createGuild();
@@ -139,7 +139,7 @@ describe('UserVerificationService', () => {
       expect(message.content).toContain('Test Guild');
       expect(message.allowedMentions).toEqual({ users: ['user-id'] });
       expect(message.components[0].components[0].data).toMatchObject({
-        custom_id: PANEL_BUTTON_ID,
+        custom_id: 'user-verification:start:guild-id:user-id',
         label: 'Xác thực người dùng',
       });
       expect(promptUpsert).toHaveBeenCalledWith(
@@ -251,6 +251,7 @@ describe('UserVerificationService', () => {
       memberHasRole: boolean,
       customId: string = PANEL_BUTTON_ID,
       otherRoleIds: string[] = [],
+      mentionedUserIds: string[] = [],
     ) {
       const { guild, verifiedRole } = createGuild();
       const showModal = vi.fn();
@@ -264,6 +265,14 @@ describe('UserVerificationService', () => {
         reply,
         guildId: 'guild-id',
         guild,
+        message: {
+          mentions: {
+            users: {
+              size: mentionedUserIds.length,
+              has: (userId: string) => mentionedUserIds.includes(userId),
+            },
+          },
+        },
         member: {
           guild,
           roles: {
@@ -387,15 +396,49 @@ describe('UserVerificationService', () => {
           customId,
         );
 
-        await service.handleInteraction(interaction);
+      await service.handleInteraction(interaction);
 
-        expect(reply).not.toHaveBeenCalled();
-        const modal = showModal.mock.calls[0][0] as ModalBuilder;
-        expect(modal.toJSON().custom_id).toBe(
-          'user-verification:details:guild-id:clicking-user-id',
-        );
-      },
-    );
+      expect(reply).not.toHaveBeenCalled();
+      const modal = showModal.mock.calls[0][0] as ModalBuilder;
+      expect(modal.toJSON().custom_id).toBe(
+        'user-verification:details:guild-id:clicking-user-id',
+      );
+    });
+
+    it("rejects a member clicking another user's ping prompt", async () => {
+      const { service, userFindUnique } = createService();
+      const { interaction, showModal, reply } = createPanelClick(
+        false,
+        'user-verification:start:guild-id:another-user-id',
+      );
+
+      await service.handleInteraction(interaction);
+
+      expect(showModal).not.toHaveBeenCalled();
+      expect(userFindUnique).not.toHaveBeenCalled();
+      expect(reply).toHaveBeenCalledWith({
+        content: 'Bạn không có quyền nhấn nút xác thực này',
+        flags: MessageFlags.Ephemeral,
+      });
+    });
+
+    it('rejects another member on an existing ping that still has the shared button ID', async () => {
+      const { service, userFindUnique } = createService();
+      const { interaction, showModal, reply } = createPanelClick(
+        false,
+        PANEL_BUTTON_ID,
+        ['another-user-id'],
+      );
+
+      await service.handleInteraction(interaction);
+
+      expect(showModal).not.toHaveBeenCalled();
+      expect(userFindUnique).not.toHaveBeenCalled();
+      expect(reply).toHaveBeenCalledWith({
+        content: 'Bạn không có quyền nhấn nút xác thực này',
+        flags: MessageFlags.Ephemeral,
+      });
+    });
   });
 
   describe('promoted members (EXTRA_VERIFIED_ROLE_IDS)', () => {

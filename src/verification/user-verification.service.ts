@@ -228,10 +228,36 @@ export class UserVerificationService {
 
     try {
       if (interaction.isButton() && interaction.guildId) {
-        // In the server every verification button (panel, new-member
-        // prompts, legacy prompts) opens the form for whoever clicks it.
-        // The form always saves the clicker's own record, so nobody can
-        // verify on behalf of someone else.
+        // The shared panel works for everyone, while a new-member prompt is
+        // restricted to the member mentioned in that prompt.
+        if (interaction.customId.startsWith(`${START_BUTTON_ID}:`)) {
+          const target = this.getInteractionTarget(
+            interaction.customId,
+            START_BUTTON_ID,
+            interaction.guildId,
+          );
+
+          if (
+            !target ||
+            target.guildId !== interaction.guildId ||
+            target.userId !== interaction.user.id
+          ) {
+            await this.replyUnauthorizedButton(interaction);
+            return true;
+          }
+        }
+
+        // Prompts posted by older versions used the shared panel ID. Distinguish
+        // them from the persistent panel by their user mention.
+        if (
+          interaction.customId === PANEL_BUTTON_ID &&
+          interaction.message.mentions.users.size > 0 &&
+          !interaction.message.mentions.users.has(interaction.user.id)
+        ) {
+          await this.replyUnauthorizedButton(interaction);
+          return true;
+        }
+
         await this.handleSelfVerificationButton(interaction);
       } else if (interaction.isButton()) {
         // Buttons from earlier direct messages carry the recipient's IDs.
@@ -313,7 +339,7 @@ export class UserVerificationService {
     });
   }
 
-  /** Opens the verification form for whoever clicked the button. */
+  /** Opens the verification form for the authorized member who clicked. */
   private async handleSelfVerificationButton(
     interaction: ButtonInteraction,
   ): Promise<void> {
@@ -442,11 +468,7 @@ export class UserVerificationService {
     );
   }
 
-  /**
-   * Mentions a new member in the verification channel. The button is the
-   * shared one, so it works for whoever clicks it; the form stays private and
-   * only the mention is visible to the channel.
-   */
+  /** Mentions a new member with a button restricted to that member. */
   private async postJoinPrompt(member: GuildMember): Promise<boolean> {
     const channel = await this.fetchVerificationChannel(member.guild);
 
@@ -456,7 +478,11 @@ export class UserVerificationService {
 
     await channel.send({
       content: `<@${member.id}>, chào mừng bạn đến **${member.guild.name}**! Vui lòng bấm nút bên dưới để xác thực thông tin cá nhân. Biểu mẫu chỉ hiển thị riêng cho bạn.`,
-      components: [this.createVerificationButtonRow()],
+      components: [
+        this.createVerificationButtonRow(
+          `${START_BUTTON_ID}:${member.guild.id}:${member.id}`,
+        ),
+      ],
       allowedMentions: { users: [member.id] },
     });
 
@@ -651,11 +677,13 @@ export class UserVerificationService {
     }
   }
 
-  /** The shared button: it opens the form for whoever clicks it. */
-  private createVerificationButtonRow(): ActionRowBuilder<ButtonBuilder> {
+  /** Creates either the shared panel button or a user-bound prompt button. */
+  private createVerificationButtonRow(
+    customId: string = PANEL_BUTTON_ID,
+  ): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(PANEL_BUTTON_ID)
+        .setCustomId(customId)
         .setLabel('Xác thực người dùng')
         .setStyle(ButtonStyle.Primary),
     );
