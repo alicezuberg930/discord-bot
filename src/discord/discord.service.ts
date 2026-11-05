@@ -11,8 +11,10 @@ import {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  Options,
   Partials,
   REST,
+  RESTEvents,
   Routes,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
@@ -38,16 +40,19 @@ export interface DiscordPingResponse {
 
 @Injectable()
 export class DiscordService
-  implements OnApplicationBootstrap, OnApplicationShutdown
-{
+  implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(DiscordService.name);
   private readonly client = new Client({
+    makeCache: Options.cacheWithLimits({
+      MessageManager: 50,
+      GuildMemberManager: 100,
+    }),
     intents: [
       GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildMembers,
-      GatewayIntentBits.DirectMessages,
     ],
-    partials: [Partials.Channel],
   });
 
   constructor(
@@ -55,7 +60,7 @@ export class DiscordService
     private readonly geminiService: GeminiService,
     private readonly userVerificationService: UserVerificationService,
     private readonly liveUpdatesService: LiveUpdatesService,
-  ) {}
+  ) { }
 
   async onApplicationBootstrap(): Promise<void> {
     if (!this.configService.get('DISCORD_ENABLED', { infer: true })) {
@@ -134,6 +139,18 @@ export class DiscordService
       }
     });
 
+    this.client.rest.on(RESTEvents.RateLimited, (data) => {
+      console.warn('Discord rate limit reached:', data);
+    });
+
+    process.on('unhandledRejection', (error) => {
+      console.error('Unhandled promise rejection:', error);
+    });
+
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught exception:', error);
+    });
+
     await this.registerCommands(token, clientId, guildId);
     await this.client.login(token);
   }
@@ -204,11 +221,11 @@ export class DiscordService
         .toJSON(),
       new SlashCommandBuilder()
         .setName('question')
-        .setDescription('Ask Gemini a question')
+        .setDescription('Chăm sóc khách hàng')
         .addStringOption((option) =>
           option
             .setName('text')
-            .setDescription('The question to send to Gemini')
+            .setDescription('Câu hỏi sẽ được gửi đến AI agent')
             .setRequired(true)
             .setMaxLength(4_000),
         )

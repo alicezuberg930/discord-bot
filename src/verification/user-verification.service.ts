@@ -53,7 +53,7 @@ export class UserVerificationService {
   constructor(
     private readonly configService: ConfigService<EnvironmentVariables, true>,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   /**
    * A new (or returning) member gets one mention in the verification channel
@@ -146,8 +146,8 @@ export class UserVerificationService {
 
       this.logger.log(
         `Checked ${members.size} existing members in Discord guild ${guild.id}: ` +
-          `${counts.verified} already verified, ${counts.restored} roles restored, ` +
-          `${counts.awaiting} awaiting verification, ${counts.failed} failed`,
+        `${counts.verified} already verified, ${counts.restored} roles restored, ` +
+        `${counts.awaiting} awaiting verification, ${counts.failed} failed`,
       );
     } catch (error) {
       this.logUnexpectedError(
@@ -299,11 +299,11 @@ export class UserVerificationService {
   ): boolean {
     return interaction.isButton()
       ? interaction.customId === PANEL_BUTTON_ID ||
-          interaction.customId === START_BUTTON_ID ||
-          interaction.customId === LEGACY_START_BUTTON_ID ||
-          interaction.customId.startsWith(`${START_BUTTON_ID}:`)
+      interaction.customId === START_BUTTON_ID ||
+      interaction.customId === LEGACY_START_BUTTON_ID ||
+      interaction.customId.startsWith(`${START_BUTTON_ID}:`)
       : interaction.customId === DETAILS_MODAL_ID ||
-          interaction.customId.startsWith(`${DETAILS_MODAL_ID}:`);
+      interaction.customId.startsWith(`${DETAILS_MODAL_ID}:`);
   }
 
   private getInteractionTarget(
