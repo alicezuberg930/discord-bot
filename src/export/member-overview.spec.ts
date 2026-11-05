@@ -51,6 +51,8 @@ describe('buildMemberOverview', () => {
         {
           discordUserId: 'c',
           accountName: 'Game C',
+          phone: '0912345678',
+          cccd: '001234567890',
           createdAt: new Date('2026-11-01T00:00:00Z'),
         },
       ],
@@ -71,9 +73,16 @@ describe('buildMemberOverview', () => {
       needsRole: 1,
       unverified: 1,
     });
-    expect(
-      overview.members.find((m) => m.discordUserId === 'c')?.accountName,
-    ).toBe('Game C');
+    expect(overview.members.find((m) => m.discordUserId === 'c')).toMatchObject(
+      {
+        accountName: 'Game C',
+        phone: '0912345678',
+        cccd: '001234567890',
+      },
+    );
+    expect(overview.members.find((m) => m.discordUserId === 'd')).toMatchObject(
+      { accountName: null, phone: null, cccd: null },
+    );
   });
 
   it('marks members who joined in the last 24 hours as new and lists them first', () => {
@@ -130,6 +139,8 @@ describe('buildMemberOverview', () => {
         {
           discordUserId: 'gone',
           accountName: 'Left Player',
+          phone: '0987654321',
+          cccd: '079200000001',
           createdAt: new Date('2026-11-03T10:00:00Z'),
         },
       ],

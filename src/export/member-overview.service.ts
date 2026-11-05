@@ -26,7 +26,13 @@ export class MemberOverviewService {
     const guildId = this.configService.get('DISCORD_GUILD_ID', { infer: true });
     const registeredUsers = await this.prisma.user.findMany({
       where: guildId ? { guildId } : undefined,
-      select: { discordUserId: true, accountName: true, createdAt: true },
+      select: {
+        discordUserId: true,
+        accountName: true,
+        phone: true,
+        cccd: true,
+        createdAt: true,
+      },
     });
 
     const guild = guildId ? await this.discordService.getGuild(guildId) : null;

@@ -24,6 +24,8 @@ export const MEMBER_EXPORT_HEADERS = [
   'vai_tro',
   'vao_server',
   'ten_tai_khoan',
+  'so_dien_thoai',
+  'cccd',
   'xac_thuc_luc',
 ] as const;
 
@@ -126,6 +128,8 @@ export class ExcelExportService {
         member.roles.map((role) => role.name).join(', '),
         member.joinedAt,
         member.accountName,
+        member.phone,
+        member.cccd,
         member.verifiedAt,
       ]),
     ];
@@ -143,9 +147,11 @@ export class ExcelExportService {
       { wch: 40 },
       { wch: 22 },
       { wch: 24 },
+      { wch: 18 },
+      { wch: 20 },
       { wch: 22 },
     ];
-    worksheet['!autofilter'] = { ref: `A1:I${members.length + 1}` };
+    worksheet['!autofilter'] = { ref: `A1:K${members.length + 1}` };
 
     return worksheet;
   }

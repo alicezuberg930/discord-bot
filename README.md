@@ -207,9 +207,10 @@ After logging in it shows every Discord member (bots excluded), newest first:
 - status: **Đã xác thực** (verified role or an `EXTRA_VERIFIED_ROLE_IDS`
   rank), **Thiếu vai trò** (submitted the form but has no role; pressing the
   button gives it back), or **Chưa xác thực**;
-- **Mới / Cũ** (joined within the last 24 hours, re-evaluated every second), roles, join time and the
-  account name from the form;
-- summary cards that double as filters, tabs, search (diacritics-insensitive),
+- **Mới / Cũ** (joined within the last 24 hours, re-evaluated every second),
+  roles, join time, and the form answers: account name, phone number and CCCD;
+- summary cards that double as filters, tabs, search (diacritics-insensitive;
+  also matches phone numbers and CCCDs),
   pagination, and a paginated activity log of joins and form submissions with
   each member's current status.
 
@@ -231,8 +232,8 @@ Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter 'system.w
 The **Tải Excel** button downloads `GET /export-excel/download`
 (`users-export.xlsx`): sheet `users` holds every verification record
 (account name, phone, CCCD, Discord IDs, email) and sheet `thanh_vien` lists
-the members as shown on the page. The page itself never shows phone numbers or
-CCCDs.
+the members as shown on the page, including the form answers. Because the page
+and the file show phone numbers and CCCDs, keep the login credentials private.
 
 ### Login
 
