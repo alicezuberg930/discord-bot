@@ -77,6 +77,19 @@ function RoleList({ roles }: { roles: OverviewRole[] }) {
   );
 }
 
+function Empty() {
+  return <span className="text-muted-foreground">—</span>;
+}
+
+/** Phone / CCCD from the form; one click selects the whole number to copy. */
+function FormNumber({ value }: { value: string | null }) {
+  return value ? (
+    <span className="select-all tabular-nums">{value}</span>
+  ) : (
+    <Empty />
+  );
+}
+
 export function MembersCard({
   overview,
   now,
@@ -105,7 +118,13 @@ export function MembersCard({
         matchesFilter(member, filter) &&
         (!needle ||
           normalizeSearch(
-            `${member.displayName} ${member.username} ${member.accountName ?? ''}`,
+            [
+              member.displayName,
+              member.username,
+              member.accountName,
+              member.phone,
+              member.cccd,
+            ].join(' '),
           ).includes(needle)),
     );
   }, [overview.members, filter, query]);
@@ -151,11 +170,11 @@ export function MembersCard({
             ))}
           </TabsList>
         </div>
-        <div className="relative w-full lg:w-72">
+        <div className="relative w-full lg:w-80">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Tìm tên, @username, tên tài khoản…"
+            placeholder="Tìm tên, tài khoản, SĐT, CCCD…"
             aria-label="Tìm thành viên"
             className="pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden"
             value={query}
@@ -182,7 +201,7 @@ export function MembersCard({
       </div>
 
       <div className="border-t">
-        <Table className="min-w-[920px]">
+        <Table className="min-w-[1180px]">
           <TableHeader className="bg-muted/40">
             <TableRow className="hover:bg-transparent">
               <TableHead className="pl-6 text-xs text-muted-foreground">
@@ -200,8 +219,14 @@ export function MembersCard({
               <TableHead className="text-xs text-muted-foreground">
                 Vào server
               </TableHead>
-              <TableHead className="pr-6 text-xs text-muted-foreground">
+              <TableHead className="text-xs text-muted-foreground">
                 Tên tài khoản (form)
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground">
+                Số điện thoại (form)
+              </TableHead>
+              <TableHead className="pr-6 text-xs text-muted-foreground">
+                CCCD (form)
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -250,7 +275,7 @@ export function MembersCard({
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="pr-6">
+                <TableCell>
                   {member.accountName ? (
                     <>
                       <div className="max-w-48 truncate">
@@ -261,14 +286,20 @@ export function MembersCard({
                       </div>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <Empty />
                   )}
+                </TableCell>
+                <TableCell>
+                  <FormNumber value={member.phone} />
+                </TableCell>
+                <TableCell className="pr-6">
+                  <FormNumber value={member.cccd} />
                 </TableCell>
               </TableRow>
             ))}
             {view.pageItems.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={6} className="py-14 text-center">
+                <TableCell colSpan={8} className="py-14 text-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <UsersIcon className="size-8 opacity-40" />
                     <span>Không có thành viên nào khớp.</span>

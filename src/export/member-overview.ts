@@ -23,6 +23,8 @@ export interface MemberInput {
 export interface RegisteredUserInput {
   discordUserId: string;
   accountName: string;
+  phone: string;
+  cccd: string;
   createdAt: Date;
 }
 
@@ -41,7 +43,10 @@ export interface OverviewMember {
   isNew: boolean;
   status: MemberStatus;
   roles: OverviewRole[];
+  /** Verification form answers; null when the member never submitted it. */
   accountName: string | null;
+  phone: string | null;
+  cccd: string | null;
   verifiedAt: Date | null;
 }
 
@@ -115,6 +120,8 @@ export function buildMemberOverview(input: BuildOverviewInput): MemberOverview {
         .sort((a, b) => b.position - a.position)
         .map((role) => ({ name: role.name, color: roleColor(role.color) })),
       accountName: record?.accountName ?? null,
+      phone: record?.phone ?? null,
+      cccd: record?.cccd ?? null,
       verifiedAt: record?.createdAt ?? null,
     };
   });

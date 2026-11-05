@@ -15,7 +15,10 @@ export interface OverviewMember {
   isNew: boolean;
   status: MemberStatus;
   roles: OverviewRole[];
+  /** Verification form answers; null when the member never submitted it. */
   accountName: string | null;
+  phone: string | null;
+  cccd: string | null;
   verifiedAt: string | null;
 }
 
